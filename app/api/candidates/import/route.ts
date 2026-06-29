@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireCompany } from '@/lib/auth'
 import { parseCSV, normaliseCandidateRow } from '@/lib/csv-parser'
+import { LIMITS } from '@/lib/security/rate-limit'
 import type { ImportResult } from '@/types'
 
 export const runtime = 'nodejs'
@@ -10,6 +11,16 @@ export const maxDuration = 30
 export async function POST(req: NextRequest) {
   try {
     const { company } = await requireCompany()
+
+    // Rate limit: 20 imports / hour / company
+    const rl = LIMITS.candidateImport(company.id)
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Import rate limit reached. Max 20 imports per hour.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 3600) } },
+      )
+    }
+
     const supabase = await createClient()
 
     const formData = await req.formData()

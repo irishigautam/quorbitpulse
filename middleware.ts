@@ -1,7 +1,44 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { LIMITS, rateLimitResponse } from '@/lib/security/rate-limit'
+import { SECURITY_HEADERS } from '@/lib/security/headers'
+
+// Routes that are rate-limited at the edge (before auth resolves)
+const AUTH_ROUTES = ['/onboarding/signup', '/api/auth']
+
+function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    req.headers.get('x-real-ip') ??
+    'unknown'
+  )
+}
+
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  for (const { key, value } of SECURITY_HEADERS) {
+    response.headers.set(key, value)
+  }
+  return response
+}
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // ── 1. Rate-limit auth routes by IP ─────────────────────────────────────────
+  if (AUTH_ROUTES.some(r => pathname.startsWith(r))) {
+    const ip = getClientIp(request)
+    const rl = LIMITS.auth(ip)
+    if (!rl.allowed) {
+      const res = NextResponse.json(
+        { error: 'Too many authentication attempts. Please wait before trying again.' },
+        { status: 429 },
+      )
+      res.headers.set('Retry-After', String(rl.retryAfter ?? 60))
+      return applySecurityHeaders(res)
+    }
+  }
+
+  // ── 2. Supabase session refresh ──────────────────────────────────────────────
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -16,34 +53,33 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options),
           )
         },
       },
-    }
+    },
   )
 
-  // Refresh session
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protect /dashboard/* routes
-  if (request.nextUrl.pathname.startsWith('/dashboard')) {
+  // ── 3. Route protection ──────────────────────────────────────────────────────
+  if (pathname.startsWith('/dashboard')) {
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/onboarding/signup'
-      url.searchParams.set('redirectTo', request.nextUrl.pathname)
+      url.searchParams.set('redirectTo', pathname)
       return NextResponse.redirect(url)
     }
   }
 
-  // If logged in, redirect away from auth pages
-  if (user && request.nextUrl.pathname === '/onboarding/signup') {
+  if (user && pathname === '/onboarding/signup') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  // ── 4. Apply security headers to all responses ───────────────────────────────
+  return applySecurityHeaders(supabaseResponse)
 }
 
 export const config = {
