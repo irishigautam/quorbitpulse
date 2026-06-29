@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { jobSlug } from '@/types'
 
-export const revalidate = 300 // 5 minutes
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const supabase = createServiceClient()
@@ -29,7 +29,7 @@ export async function GET() {
       <title><![CDATA[${job.title} at ${company.name}]]></title>
       <link>${link}</link>
       <guid isPermaLink="true">${link}</guid>
-      <description><![CDATA[${desc}…]]></description>
+      <description><![CDATA[${desc}â¦]]></description>
       <author><![CDATA[${company.name}]]></author>
       <pubDate>${new Date(String(job.posted_at)).toUTCString()}</pubDate>
       <category><![CDATA[${String(job.job_type).replace('_', '-')}]]></category>
@@ -41,9 +41,9 @@ export async function GET() {
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>JobPulse — Open Job Registry</title>
+    <title>JobPulse â Open Job Registry</title>
     <link>${appUrl}</link>
-    <description>The latest jobs from JobPulse — post once, reach everywhere. Powered by Quorbit.</description>
+    <description>The latest jobs from JobPulse â post once, reach everywhere. Powered by Quorbit.</description>
     <language>en</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${appUrl}/api/feed" rel="self" type="application/rss+xml"/>
