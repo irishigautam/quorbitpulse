@@ -26,6 +26,10 @@ const VALID_DOMAINS = [
 
 const VALID_SENIORITIES = ['intern', 'junior', 'mid', 'senior', 'lead', 'principal']
 
+/**
+ * Build the profile text to send to Claude from candidate fields.
+ * Concatenates all available structured data.
+ */
 export function buildProfileText(candidate: {
   full_name: string
   current_title?: string | null
@@ -99,7 +103,7 @@ Respond ONLY with valid JSON matching this shape:
   const raw = message.content[0].type === 'text' ? message.content[0].text : ''
 
   // Strip markdown code fences if present
-  const jsonStr = raw.replace(/```json\n߀�▹/g, '').replace(/```\n?/g, '').trim()
+  const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
   let parsed: CandidateFingerprint
   try {
