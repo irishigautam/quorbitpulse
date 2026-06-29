@@ -345,7 +345,7 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [candidates, setCandidates] = useState(initialCandidates)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [sortBy, setSortBy] = useState<'created_at' | 'match_score'>('match_score')
+  const [sortBy, setSortBy] = useState<'created_at' | 'match_score' | 'blended_score'>('blended_score')
   const [assignTarget, setAssignTarget] = useState<{ candidateId: string; name: string } | null>(null)
   const [selectedJob, setSelectedJob] = useState('')
   const [assigning, setAssigning] = useState(false)
@@ -355,6 +355,8 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [scoringProgress, setScoringProgress] = useState('')
   const [breakdown, setBreakdown] = useState<ScoreBreakdown | null>(null)
   const [chatCandidate, setChatCandidate] = useState<ImportedCandidate | null>(null)
+  const [blendingStatus, setBlendingStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [blendProgress, setBlendProgress] = useState('')
   const [batchChatJob, setBatchChatJob] = useState('')
   const [batchChatN, setBatchChatN] = useState(5)
   const [batchChatStatus, setBatchChatStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
@@ -373,6 +375,7 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
       return matchesSearch && matchesStatus
     })
     .sort((a, b) => {
+      if (sortBy === 'blended_score') return (b.blended_score ?? b.match_score ?? -1) - (a.blended_score ?? a.match_score ?? -1)
       if (sortBy === 'match_score') return (b.match_score ?? -1) - (a.match_score ?? -1)
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
@@ -473,6 +476,29 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
           c.id === candidateId ? { ...c, fingerprint_status: 'failed' as const } : c
         ))
       })
+    }
+  }
+
+  async function handleBlendScores() {
+    setBlendingStatus('running')
+    setBlendProgress('')
+    try {
+      const res = await fetch('/api/candidates/blend-scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const json = await res.json()
+      if (!res.ok) { setBlendingStatus('error'); setBlendProgress(json.error ?? 'Failed'); return }
+      setBlendingStatus('done')
+      setBlendProgress(`${json.updated} updated`)
+      // Update local state with new blended scores
+      const scoreMap: Record<string, number | null> = {}
+      for (const r of json.results ?? []) scoreMap[r.id] = r.blended_score
+      startTransition(() => {
+        setCandidates(prev => prev.map(c =>
+          c.id in scoreMap ? { ...c, blended_score: scoreMap[c.id] } : c
+        ))
+      })
+    } catch {
+      setBlendingStatus('error')
+      setBlendProgress('Network error')
     }
   }
 
@@ -618,6 +644,18 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
             {scoringProgress}
           </p>
         )}
+        <button onClick={handleBlendScores} disabled={blendingStatus === 'running'}
+          className="px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-40 flex items-center gap-2 border"
+          style={{ color: '#7C3AED', borderColor: '#DDD6FE', background: '#FAF5FF' }}
+          title="Recompute blended score (70% match + 30% chat readiness)">
+          {blendingStatus === 'running' ? (
+            <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          ) : '★'}
+          {blendingStatus === 'running' ? 'Blending…' : blendingStatus === 'done' ? `★ ${blendProgress}` : '★ Blend scores'}
+        </button>
       </div>
 
       {/* Auto-send chat — lc4 */}
@@ -672,9 +710,10 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
           <option value="">All statuses</option>
           {Object.entries(STATUS_STYLES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value as 'created_at' | 'match_score')}
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as 'created_at' | 'match_score' | 'blended_score')}
           className="border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2">
-          <option value="match_score">Best match first</option>
+          <option value="blended_score">Blended score first</option>
+          <option value="match_score">Match score first</option>
           <option value="created_at">Newest first</option>
         </select>
         <p className="text-sm self-center ml-auto" style={{ color: 'var(--muted)' }}>
@@ -694,7 +733,10 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>Source</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>Status</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-                  Score <span style={{ color: '#7C3AED' }}>✦</span>
+                  Match <span style={{ color: '#7C3AED' }}>✦</span>
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#7C3AED' }}>
+                  Blended
                 </th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -702,7 +744,7 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
             <tbody className="divide-y">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm" style={{ color: 'var(--muted)' }}>
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm" style={{ color: 'var(--muted)' }}>
                     No candidates match your search.
                   </td>
                 </tr>
@@ -744,6 +786,18 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
                         </button>
                       ) : (
                         <ScoreBadge score={c.match_score} />
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {c.blended_score !== null && c.blended_score !== undefined ? (
+                        <span className="inline-flex items-center gap-1">
+                          <ScoreBadge score={c.blended_score} />
+                          {c.blended_score !== c.match_score && (
+                            <span className="text-xs font-medium" style={{ color: '#7C3AED' }}>★</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-xs" style={{ color: 'var(--muted)' }}>—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

@@ -115,6 +115,7 @@ export interface ImportedCandidate {
   ai_fingerprint: Record<string, unknown> | null
   fingerprint_status: 'pending' | 'processing' | 'done' | 'failed'
   match_score: number | null          // best score across all assigned jobs (0–100)
+  blended_score: number | null        // 70% match_score + 30% chat readiness (lc6)
   score_breakdown: Record<string, unknown> | null
   fingerprinted_at: string | null
   scored_at: string | null
