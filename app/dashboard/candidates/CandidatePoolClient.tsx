@@ -1,9 +1,23 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import type { ImportedCandidate } from '@/types'
 import type { ScoreBreakdown } from '@/lib/scoring/engine'
+
+// ── Chat types ──────────────────────────────────────────────────────────────
+interface TranscriptEntry { role: 'assistant' | 'user'; content: string; ts?: string }
+interface ChatSession {
+  id: string
+  status: 'pending' | 'active' | 'completed' | 'expired'
+  transcript: TranscriptEntry[]
+  readiness_score: number | null
+  email_to: string | null
+  email_sent_at: string | null
+  created_at: string
+  job_id: string
+  jobs?: { title: string } | null
+}
 
 interface Props {
   initialCandidates: ImportedCandidate[]
@@ -128,6 +142,205 @@ function ScoreBreakdownPanel({
   )
 }
 
+// ── Chat Panel (send invite + view transcript) ──────────────────────────────
+function ChatPanel({
+  candidate,
+  activeJobs,
+  onClose,
+  onSent,
+}: {
+  candidate: ImportedCandidate
+  activeJobs: { id: string; title: string }[]
+  onClose: () => void
+  onSent: () => void
+}) {
+  const [sessions, setSessions] = useState<ChatSession[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [sendJob, setSendJob] = useState(activeJobs[0]?.id ?? '')
+  const [sendMsg, setSendMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [viewSession, setViewSession] = useState<ChatSession | null>(null)
+
+  // Load sessions on mount
+  useEffect(() => {
+    fetch(`/api/candidates/${candidate.id}/chat-sessions`)
+      .then(r => r.json())
+      .then(d => { setSessions(d.sessions ?? []); setLoading(false) })
+      .catch(() => { setSessions([]); setLoading(false) })
+  }, [candidate.id])
+
+  async function handleSend() {
+    if (!sendJob) return
+    setSending(true)
+    setSendMsg(null)
+    const res = await fetch('/api/candidates/send-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate_id: candidate.id, job_id: sendJob }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setSendMsg({ type: 'err', text: json.error ?? 'Failed to send' })
+    } else {
+      setSendMsg({
+        type: 'ok',
+        text: json.email_sent
+          ? `Chat invite sent to ${candidate.email}`
+          : `Session created — candidate has no email. Share the link manually.`,
+      })
+      onSent()
+      // Reload sessions
+      fetch(`/api/candidates/${candidate.id}/chat-sessions`)
+        .then(r => r.json())
+        .then(d => setSessions(d.sessions ?? []))
+    }
+    setSending(false)
+  }
+
+  const readinessColor = (score: number | null) => {
+    if (score === null) return '#777'
+    if (score >= 75) return '#15803D'
+    if (score >= 50) return '#1D4ED8'
+    return '#991B1B'
+  }
+
+  // ── Transcript view ────────────────────────────────────────────────────────
+  if (viewSession) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col" style={{ maxHeight: '85vh' }}>
+          {/* Header */}
+          <div className="flex items-center justify-between p-5 border-b flex-shrink-0">
+            <div>
+              <p className="font-semibold">{candidate.full_name} — Chat transcript</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                {viewSession.jobs?.title ?? 'Unknown role'} ·{' '}
+                {viewSession.status === 'completed' ? '✅ Completed' : viewSession.status === 'active' ? '🟡 In progress' : viewSession.status}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {viewSession.readiness_score !== null && (
+                <div className="text-center">
+                  <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Readiness</p>
+                  <p className="text-2xl font-bold tabular-nums leading-tight"
+                    style={{ color: readinessColor(viewSession.readiness_score) }}>
+                    {viewSession.readiness_score}
+                    <span className="text-sm font-normal">/100</span>
+                  </p>
+                </div>
+              )}
+              <button onClick={() => setViewSession(null)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+            </div>
+          </div>
+
+          {/* Transcript */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {viewSession.transcript.length === 0 ? (
+              <p className="text-sm text-center py-8" style={{ color: 'var(--muted)' }}>No messages yet.</p>
+            ) : viewSession.transcript.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed"
+                  style={{
+                    background: msg.role === 'user' ? '#7C3AED' : '#F3F4F6',
+                    color: msg.role === 'user' ? '#fff' : '#111',
+                    borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                  }}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-4 border-t flex-shrink-0">
+            <button onClick={() => setViewSession(null)}
+              className="w-full py-2.5 rounded-xl border text-sm font-medium hover:bg-gray-50">
+              ← Back to sessions
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Sessions list + send form ──────────────────────────────────────────────
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="font-semibold">💬 AI Chat — {candidate.full_name}</p>
+            {candidate.email
+              ? <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{candidate.email}</p>
+              : <p className="text-xs mt-0.5 text-amber-600">No email — link will need to be shared manually</p>
+            }
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+        </div>
+
+        {/* Past sessions */}
+        {loading ? (
+          <p className="text-sm text-center py-4" style={{ color: 'var(--muted)' }}>Loading…</p>
+        ) : sessions && sessions.length > 0 ? (
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--muted)' }}>Past sessions</p>
+            <div className="space-y-2">
+              {sessions.map(s => (
+                <button key={s.id} onClick={() => setViewSession(s)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border hover:border-purple-300 hover:bg-purple-50 text-left transition-colors">
+                  <div>
+                    <p className="text-sm font-medium">{s.jobs?.title ?? 'Unknown role'}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                      {s.status === 'completed' ? '✅ Completed' : s.status === 'active' ? '🟡 In progress' : s.status === 'pending' ? '⏳ Sent, awaiting response' : '⌛ Expired'}
+                      {' · '}{new Date(s.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {s.readiness_score !== null && (
+                    <span className="text-sm font-bold tabular-nums ml-3 flex-shrink-0"
+                      style={{ color: readinessColor(s.readiness_score) }}>
+                      {s.readiness_score}/100
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : sessions?.length === 0 ? (
+          <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>No chat sessions yet.</p>
+        ) : null}
+
+        {/* Send new invite */}
+        <div className="border-t pt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--muted)' }}>Send new chat invite</p>
+          <select value={sendJob} onChange={e => setSendJob(e.target.value)}
+            className="w-full border rounded-xl px-3 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2">
+            <option value="">Select a job…</option>
+            {activeJobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+          </select>
+          {sendMsg && (
+            <p className={`text-sm mb-3 ${sendMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+              {sendMsg.text}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button onClick={handleSend} disabled={!sendJob || sending}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+              style={{ background: '#7C3AED' }}>
+              {sending ? 'Sending…' : candidate.email ? '✉ Send invite' : '🔗 Create link'}
+            </button>
+            <button onClick={onClose}
+              className="px-4 py-2.5 rounded-xl border text-sm font-medium hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 export default function CandidatePoolClient({ initialCandidates, activeJobs, total }: Props) {
   const [candidates, setCandidates] = useState(initialCandidates)
   const [search, setSearch] = useState('')
@@ -141,6 +354,7 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [scoringStatus, setScoringStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [scoringProgress, setScoringProgress] = useState('')
   const [breakdown, setBreakdown] = useState<ScoreBreakdown | null>(null)
+  const [chatCandidate, setChatCandidate] = useState<ImportedCandidate | null>(null)
   const [, startTransition] = useTransition()
 
   const filtered = candidates
@@ -284,6 +498,20 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   return (
     <>
       {breakdown && <ScoreBreakdownPanel breakdown={breakdown} onClose={() => setBreakdown(null)} />}
+      {chatCandidate && (
+        <ChatPanel
+          candidate={chatCandidate}
+          activeJobs={activeJobs}
+          onClose={() => setChatCandidate(null)}
+          onSent={() => {
+            startTransition(() => {
+              setCandidates(prev => prev.map(c =>
+                c.id === chatCandidate.id ? { ...c, status: 'chatted' as const } : c
+              ))
+            })
+          }}
+        />
+      )}
 
       {/* Assign modal */}
       {assignTarget && (
@@ -457,6 +685,11 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
                           className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 font-medium"
                           style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}>
                           Assign
+                        </button>
+                        <button onClick={() => setChatCandidate(c)}
+                          className="text-xs px-3 py-1.5 border rounded-lg hover:bg-purple-50 font-medium"
+                          style={{ color: '#7C3AED', borderColor: '#7C3AED' }}>
+                          💬 Chat
                         </button>
                       </div>
                     </td>
