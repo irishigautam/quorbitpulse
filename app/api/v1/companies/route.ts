@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   // Attach job counts
   const companiesWithCount = await Promise.all(
-    (data ?? []).map(async company => {
+    (data ?? []).map(async (company: Record<string, unknown>) => {
       const { count: jobCount } = await supabase
         .from('jobs')
         .select('*', { count: 'exact', head: true })
