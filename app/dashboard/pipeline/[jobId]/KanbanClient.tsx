@@ -285,6 +285,11 @@ export default function KanbanClient({
   const [assignments, setAssignments] = useState(initialAssignments)
   const [selected, setSelected] = useState<Assignment | null>(null)
   const [search, setSearch] = useState('')
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState('')
+  const [bulkStage, setBulkStage] = useState<Stage>('screened')
+  const [bulkStatus, setBulkStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [bulkMsg, setBulkMsg] = useState('')
   const [, startTransition] = useTransition()
 
   const filtered = search
@@ -296,7 +301,6 @@ export default function KanbanClient({
     : assignments
 
   async function handleStageChange(assignmentId: string, stage: Stage) {
-    // Optimistic update
     startTransition(() => {
       setAssignments(prev => prev.map(a =>
         a.id === assignmentId ? { ...a, pipeline_stage: stage } : a
@@ -305,7 +309,6 @@ export default function KanbanClient({
         setSelected(prev => prev ? { ...prev, pipeline_stage: stage } : null)
       }
     })
-
     await fetch(`/api/assignments/${assignmentId}/stage`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -332,6 +335,64 @@ export default function KanbanClient({
     })
   }
 
+  function toggleCheck(id: string) {
+    setCheckedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setCheckedIds(new Set(filtered.map(a => a.id)))
+  }
+
+  function clearSelection() {
+    setCheckedIds(new Set())
+    setBulkStatus('idle')
+    setBulkMsg('')
+  }
+
+  async function runBulkAction() {
+    if (checkedIds.size === 0 || !bulkAction) return
+    setBulkStatus('running')
+    setBulkMsg('')
+
+    const body: Record<string, unknown> = {
+      assignment_ids: Array.from(checkedIds),
+      action: bulkAction,
+    }
+    if (bulkAction === 'stage') body.stage = bulkStage
+    if (bulkAction === 'reject') body.action = 'reject'
+
+    const res = await fetch('/api/assignments/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+
+    if (!res.ok) {
+      setBulkStatus('error')
+      setBulkMsg(json.error ?? 'Failed')
+      return
+    }
+
+    setBulkStatus('done')
+    setBulkMsg(`✓ ${json.updated} updated`)
+
+    // Optimistic state update
+    const targetStage: Stage = bulkAction === 'reject' ? 'rejected' : bulkStage
+    if (bulkAction === 'stage' || bulkAction === 'reject') {
+      startTransition(() => {
+        setAssignments(prev => prev.map(a =>
+          checkedIds.has(a.id) ? { ...a, pipeline_stage: targetStage } : a
+        ))
+      })
+    }
+    setCheckedIds(new Set())
+  }
+
   const rejected = filtered.filter(a => a.pipeline_stage === 'rejected')
 
   return (
@@ -347,16 +408,60 @@ export default function KanbanClient({
       )}
 
       {/* Search + stats bar */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <input
-          type="text" placeholder="Search candidates, tags…" value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 w-64"
+          type="text"
+          placeholder='Search: "React AND senior NOT contractor"'
+          value={search}
+          onChange={e => { setSearch(e.target.value); clearSelection() }}
+          className="border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 flex-1 min-w-[220px] max-w-sm"
         />
+        <button onClick={selectAll} className="text-xs px-3 py-2 border rounded-xl hover:bg-gray-50 font-medium">
+          Select all ({filtered.length})
+        </button>
+        {checkedIds.size > 0 && (
+          <button onClick={clearSelection} className="text-xs px-3 py-2 border rounded-xl hover:bg-gray-50">
+            ✕ Clear ({checkedIds.size})
+          </button>
+        )}
         <p className="text-sm ml-auto" style={{ color: 'var(--muted)' }}>
           {assignments.length} candidates · {assignments.filter(a => a.pipeline_stage === 'hired').length} hired
         </p>
       </div>
+
+      {/* Bulk action bar — ats4 */}
+      {checkedIds.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-xl border flex-wrap"
+          style={{ background: '#EFF6FF', borderColor: '#BFDBFE' }}>
+          <p className="text-sm font-semibold" style={{ color: '#1D4ED8' }}>
+            {checkedIds.size} selected
+          </p>
+          <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}
+            className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none">
+            <option value="">Choose action…</option>
+            <option value="stage">Move to stage</option>
+            <option value="reject">Reject all</option>
+          </select>
+          {bulkAction === 'stage' && (
+            <select value={bulkStage} onChange={e => setBulkStage(e.target.value as Stage)}
+              className="border rounded-lg px-2 py-1.5 text-sm focus:outline-none">
+              {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          )}
+          <button
+            onClick={runBulkAction}
+            disabled={!bulkAction || bulkStatus === 'running'}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
+            style={{ background: bulkAction === 'reject' ? '#DC2626' : '#1D4ED8' }}>
+            {bulkStatus === 'running' ? 'Running…' : 'Apply'}
+          </button>
+          {bulkMsg && (
+            <p className={`text-xs font-medium ${bulkStatus === 'error' ? 'text-red-600' : 'text-green-700'}`}>
+              {bulkMsg}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Kanban columns */}
       <div className="overflow-x-auto pb-4">
@@ -365,7 +470,6 @@ export default function KanbanClient({
             const cards = filtered.filter(a => a.pipeline_stage === stage.key)
             return (
               <div key={stage.key} className="w-64 flex-shrink-0">
-                {/* Column header */}
                 <div className="flex items-center justify-between px-3 py-2 rounded-xl mb-2"
                   style={{ background: stage.bg }}>
                   <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: stage.color }}>
@@ -377,7 +481,6 @@ export default function KanbanClient({
                   </span>
                 </div>
 
-                {/* Cards */}
                 <div className="space-y-2 min-h-24">
                   {cards.length === 0 ? (
                     <div className="rounded-xl border-2 border-dashed p-4 text-center"
@@ -385,7 +488,21 @@ export default function KanbanClient({
                       <p className="text-xs" style={{ color: 'var(--muted)' }}>No candidates</p>
                     </div>
                   ) : cards.map(a => (
-                    <KanbanCard key={a.id} assignment={a} onClick={() => setSelected(a)} />
+                    <div key={a.id} className="relative">
+                      {/* Checkbox for bulk select */}
+                      <div className="absolute top-2 left-2 z-10">
+                        <input
+                          type="checkbox"
+                          checked={checkedIds.has(a.id)}
+                          onChange={() => toggleCheck(a.id)}
+                          onClick={e => e.stopPropagation()}
+                          className="w-3.5 h-3.5 rounded cursor-pointer accent-blue-600"
+                        />
+                      </div>
+                      <div className="pl-5">
+                        <KanbanCard assignment={a} onClick={() => setSelected(a)} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -402,7 +519,18 @@ export default function KanbanClient({
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {rejected.map(a => (
-              <KanbanCard key={a.id} assignment={a} onClick={() => setSelected(a)} />
+              <div key={a.id} className="relative">
+                <div className="absolute top-2 left-2 z-10">
+                  <input type="checkbox" checked={checkedIds.has(a.id)}
+                    onChange={() => toggleCheck(a.id)}
+                    onClick={e => e.stopPropagation()}
+                    className="w-3.5 h-3.5 rounded cursor-pointer accent-blue-600"
+                  />
+                </div>
+                <div className="pl-5">
+                  <KanbanCard assignment={a} onClick={() => setSelected(a)} />
+                </div>
+              </div>
             ))}
           </div>
         </div>
