@@ -192,6 +192,14 @@ export const DOMAIN_SKILLS_BY_LEVEL: Record<Domain, Record<SeniorityLevel, strin
     director: ['Security Strategy', 'Compliance (SOC2, ISO)', 'Risk Management', 'Board Security Reporting'],
     executive: ['CISO Track', 'Cyber Insurance', 'M&A Security Due Diligence'],
   },
+  Salesforce: {
+    entry: ['Salesforce basics', 'CRM fundamentals', 'Data entry', 'Reports & Dashboards', 'Leads & Opportunities'],
+    mid: ['Apex basics', 'Flows & Process Builder', 'SOQL', 'Integrations', 'Sales Cloud'],
+    senior: ['Apex Development', 'Lightning Web Components', 'Integration Architecture', 'DevOps Center'],
+    manager: ['Salesforce Team Hiring', 'Release Management', 'Org Strategy', 'License Management'],
+    director: ['Salesforce Platform Strategy', 'Multi-cloud Architecture', 'ROI Measurement', 'Vendor Negotiation'],
+    executive: ['CRM Vision', 'Enterprise Architecture', 'Digital Transformation', 'Board CRM Reporting'],
+  },
 }
 
 // Cross-role skills that appear at each seniority level (not domain-specific)
