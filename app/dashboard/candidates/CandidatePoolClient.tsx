@@ -355,6 +355,10 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [scoringProgress, setScoringProgress] = useState('')
   const [breakdown, setBreakdown] = useState<ScoreBreakdown | null>(null)
   const [chatCandidate, setChatCandidate] = useState<ImportedCandidate | null>(null)
+  const [batchChatJob, setBatchChatJob] = useState('')
+  const [batchChatN, setBatchChatN] = useState(5)
+  const [batchChatStatus, setBatchChatStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [batchChatResult, setBatchChatResult] = useState<{ sent: number; skipped: number; message?: string } | null>(null)
   const [, startTransition] = useTransition()
 
   const filtered = candidates
@@ -472,6 +476,39 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
     }
   }
 
+  async function handleBatchChat() {
+    if (!batchChatJob) return
+    setBatchChatStatus('running')
+    setBatchChatResult(null)
+    try {
+      const res = await fetch('/api/candidates/send-chat-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: batchChatJob, limit: batchChatN }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setBatchChatStatus('error')
+        setBatchChatResult({ sent: 0, skipped: 0, message: json.error ?? 'Failed' })
+        return
+      }
+      setBatchChatStatus('done')
+      setBatchChatResult({ sent: json.sent, skipped: json.skipped, message: json.message })
+      // Update status of sent candidates to 'chatted'
+      const sentIds = new Set((json.results ?? []).filter((r: any) => r.status === 'sent' || r.status === 'no_email').map((r: any) => r.candidate_id))
+      if (sentIds.size > 0) {
+        startTransition(() => {
+          setCandidates(prev => prev.map(c =>
+            sentIds.has(c.id) ? { ...c, status: 'chatted' as const } : c
+          ))
+        })
+      }
+    } catch {
+      setBatchChatStatus('error')
+      setBatchChatResult({ sent: 0, skipped: 0, message: 'Network error' })
+    }
+  }
+
   if (total === 0) {
     return (
       <div className="bg-white rounded-2xl border p-14 text-center">
@@ -579,6 +616,43 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
         {scoringProgress && (
           <p className={`text-xs font-medium ${scoringStatus === 'error' ? 'text-red-600' : 'text-green-600'}`}>
             {scoringProgress}
+          </p>
+        )}
+      </div>
+
+      {/* Auto-send chat — lc4 */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap p-4 rounded-2xl border" style={{ background: '#FAF5FF', borderColor: '#DDD6FE' }}>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold" style={{ color: '#5B21B6' }}>💬 Auto-send chat to top candidates</p>
+          <p className="text-xs mt-0.5" style={{ color: '#7C3AED' }}>
+            Sends AI readiness chat invites to the highest-scoring candidates who haven't been contacted yet.
+          </p>
+        </div>
+        <select value={batchChatJob} onChange={e => { setBatchChatJob(e.target.value); setBatchChatStatus('idle'); setBatchChatResult(null) }}
+          className="border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2" style={{ borderColor: '#DDD6FE' }}>
+          <option value="">Select job…</option>
+          {activeJobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+        </select>
+        <select value={batchChatN} onChange={e => setBatchChatN(Number(e.target.value))}
+          className="border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 w-28" style={{ borderColor: '#DDD6FE' }}>
+          {[3, 5, 10, 15, 20].map(n => <option key={n} value={n}>Top {n}</option>)}
+        </select>
+        <button onClick={handleBatchChat} disabled={!batchChatJob || batchChatStatus === 'running'}
+          className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40 flex items-center gap-2"
+          style={{ background: '#7C3AED' }}>
+          {batchChatStatus === 'running' && (
+            <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          )}
+          {batchChatStatus === 'running' ? 'Sending…' : '🚀 Send invites'}
+        </button>
+        {batchChatResult && (
+          <p className={`text-xs font-medium w-full ${batchChatStatus === 'error' ? 'text-red-600' : 'text-green-700'}`}>
+            {batchChatResult.message
+              ? batchChatResult.message
+              : `✓ ${batchChatResult.sent} sent · ${batchChatResult.skipped} skipped`}
           </p>
         )}
       </div>
