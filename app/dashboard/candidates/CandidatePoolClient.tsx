@@ -340,6 +340,193 @@ function ChatPanel({
   )
 }
 
+// ── LLM Export Upload Panel — lc8 ──────────────────────────────────────────
+function LlmUploadPanel({
+  candidate,
+  onClose,
+  onDone,
+}: {
+  candidate: ImportedCandidate
+  onClose: () => void
+  onDone: (merged: { skills: string[]; domain: string[]; years_experience: number | null }) => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
+  const [result, setResult] = useState<{
+    format: string
+    totalConversations: number
+    workRelevant: number
+    personal: number
+    extracted: { skills: string[]; domain: string[]; summary: string; conversationsAnalysed: number }
+    merged: { skills: string[]; domain: string[]; years_experience: number | null }
+  } | null>(null)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function handleUpload() {
+    if (!file) return
+    setStatus('uploading')
+    setErrorMsg('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/candidates/${candidate.id}/upload-llm-export`, {
+        method: 'POST',
+        body: form,
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setStatus('error')
+        setErrorMsg(json.error ?? 'Upload failed')
+        return
+      }
+      setStatus('done')
+      setResult(json)
+      onDone(json.merged)
+    } catch {
+      setStatus('error')
+      setErrorMsg('Network error')
+    }
+  }
+
+  const sourceLabel = { chatgpt: 'ChatGPT', claude: 'Claude' }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="font-semibold">📂 Upload LLM history — {candidate.full_name}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+              ChatGPT or Claude export JSON · Privacy-classified before processing
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+        </div>
+
+        {status !== 'done' && (
+          <>
+            {/* Instructions */}
+            <div className="rounded-xl p-3 mb-4 text-xs space-y-1.5" style={{ background: '#F5F3FF', color: '#5B21B6' }}>
+              <p className="font-semibold">How to export:</p>
+              <p>• <strong>ChatGPT:</strong> Settings → Data controls → Export data → conversations.json</p>
+              <p>• <strong>Claude:</strong> Settings → Privacy → Export data → claude_conversations.json</p>
+            </div>
+
+            {/* File input */}
+            <label className="block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-purple-400 transition-colors mb-4"
+              style={{ borderColor: file ? '#7C3AED' : '#E5E7EB' }}>
+              <input type="file" accept=".json" className="hidden"
+                onChange={e => { setFile(e.target.files?.[0] ?? null); setStatus('idle'); setErrorMsg('') }} />
+              {file ? (
+                <div>
+                  <p className="font-medium text-sm" style={{ color: '#7C3AED' }}>📄 {file.name}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+                    {(file.size / 1024).toFixed(0)} KB · Click to change
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium mb-1">Drop JSON file here or click to browse</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Max 10 MB</p>
+                </div>
+              )}
+            </label>
+
+            {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
+
+            <div className="flex gap-2">
+              <button onClick={handleUpload} disabled={!file || status === 'uploading'}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-2"
+                style={{ background: '#7C3AED' }}>
+                {status === 'uploading' && (
+                  <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                )}
+                {status === 'uploading' ? 'Analysing…' : '🔍 Analyse & enrich'}
+              </button>
+              <button onClick={onClose}
+                className="px-4 py-2.5 rounded-xl border text-sm font-medium hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+
+            <p className="text-xs mt-3 text-center" style={{ color: 'var(--muted)' }}>
+              Personal conversations are never stored. Only work-relevant content is processed.
+            </p>
+          </>
+        )}
+
+        {status === 'done' && result && (
+          <div>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: 'Total', value: result.totalConversations },
+                { label: 'Work', value: result.workRelevant, accent: true },
+                { label: 'Private (skipped)', value: result.personal },
+              ].map(({ label, value, accent }) => (
+                <div key={label} className="rounded-xl p-3 text-center"
+                  style={{ background: accent ? '#F5F3FF' : '#F9FAFB' }}>
+                  <p className="text-xl font-bold tabular-nums" style={{ color: accent ? '#7C3AED' : '#111' }}>{value}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {result.extracted.summary && (
+              <div className="rounded-xl p-3 mb-4" style={{ background: '#F0FDF4', color: '#14532D' }}>
+                <p className="text-xs font-semibold mb-1">AI summary</p>
+                <p className="text-sm">{result.extracted.summary}</p>
+              </div>
+            )}
+
+            {result.extracted.skills.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--muted)' }}>
+                  New skills detected
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.extracted.skills.map(s => (
+                    <span key={s} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: '#DCFCE7', color: '#14532D' }}>{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.extracted.domain.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--muted)' }}>
+                  Domains
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.extracted.domain.map(d => (
+                    <span key={d} className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: '#EFF6FF', color: '#1D4ED8' }}>{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+              Source: {sourceLabel[result.format as 'chatgpt' | 'claude'] ?? result.format} ·
+              {result.extracted.conversationsAnalysed} conversations analysed · Profile updated ✓
+            </p>
+
+            <button onClick={onClose}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white"
+              style={{ background: '#7C3AED' }}>
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function CandidatePoolClient({ initialCandidates, activeJobs, total }: Props) {
   const [candidates, setCandidates] = useState(initialCandidates)
@@ -355,6 +542,7 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [scoringProgress, setScoringProgress] = useState('')
   const [breakdown, setBreakdown] = useState<ScoreBreakdown | null>(null)
   const [chatCandidate, setChatCandidate] = useState<ImportedCandidate | null>(null)
+  const [llmUploadCandidate, setLlmUploadCandidate] = useState<ImportedCandidate | null>(null)
   const [blendingStatus, setBlendingStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [blendProgress, setBlendProgress] = useState('')
   const [batchChatJob, setBatchChatJob] = useState('')
@@ -572,6 +760,22 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
                 c.id === chatCandidate.id ? { ...c, status: 'chatted' as const } : c
               ))
             })
+          }}
+        />
+      )}
+      {llmUploadCandidate && (
+        <LlmUploadPanel
+          candidate={llmUploadCandidate}
+          onClose={() => setLlmUploadCandidate(null)}
+          onDone={(merged) => {
+            startTransition(() => {
+              setCandidates(prev => prev.map(c =>
+                c.id === llmUploadCandidate.id
+                  ? { ...c, skills: merged.skills, domain: merged.domain, years_experience: merged.years_experience, llm_export_processed_at: new Date().toISOString() }
+                  : c
+              ))
+            })
+            setLlmUploadCandidate(null)
           }}
         />
       )}
@@ -818,6 +1022,12 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
                           className="text-xs px-3 py-1.5 border rounded-lg hover:bg-purple-50 font-medium"
                           style={{ color: '#7C3AED', borderColor: '#7C3AED' }}>
                           💬 Chat
+                        </button>
+                        <button onClick={() => setLlmUploadCandidate(c)}
+                          className="text-xs px-2.5 py-1.5 border rounded-lg hover:bg-purple-50 font-medium"
+                          style={{ color: '#7C3AED', borderColor: '#7C3AED' }}
+                          title={c.llm_export_processed_at ? `LLM history uploaded ${new Date(c.llm_export_processed_at).toLocaleDateString()}` : 'Upload LLM chat history'}>
+                          {c.llm_export_processed_at ? '📂✓' : '📂'}
                         </button>
                       </div>
                     </td>

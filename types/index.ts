@@ -117,6 +117,10 @@ export interface ImportedCandidate {
   match_score: number | null          // best score across all assigned jobs (0–100)
   blended_score: number | null        // 70% match_score + 30% chat readiness (lc6)
   score_breakdown: Record<string, unknown> | null
+  // LLM export enrichment — lc8
+  llm_export_processed_at: string | null
+  llm_export_summary: string | null
+  llm_export_source: 'chatgpt' | 'claude' | null
   fingerprinted_at: string | null
   scored_at: string | null
   status: CandidateStatus
