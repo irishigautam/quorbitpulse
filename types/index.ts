@@ -105,12 +105,19 @@ export interface ImportedCandidate {
   notes: string | null
   import_source: ImportSource
   import_batch_id: string | null
-  // Fingerprint (Phase 2)
+  // Fingerprint — Phase 1 (basic, from CSV columns)
   domain: string[]
   seniority: SeniorityLevel | null
   skills: string[]
   years_experience: number | null
   fingerprint_at: string | null
+  // AI Scoring — Phase 2
+  ai_fingerprint: Record<string, unknown> | null
+  fingerprint_status: 'pending' | 'processing' | 'done' | 'failed'
+  match_score: number | null          // best score across all assigned jobs (0–100)
+  score_breakdown: Record<string, unknown> | null
+  fingerprinted_at: string | null
+  scored_at: string | null
   status: CandidateStatus
   created_at: string
   updated_at: string

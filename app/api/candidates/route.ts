@@ -14,12 +14,16 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('q')
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 200)
     const offset = parseInt(searchParams.get('offset') ?? '0')
+    const sort = searchParams.get('sort') ?? 'created_at'
+    const sortAsc = searchParams.get('sort_dir') === 'asc'
+    const allowedSorts = ['created_at', 'match_score', 'full_name']
+    const safeSort = allowedSorts.includes(sort) ? sort : 'created_at'
 
     let query = supabase
       .from('imported_candidates')
       .select('*', { count: 'exact' })
       .eq('company_id', company.id)
-      .order('created_at', { ascending: false })
+      .order(safeSort, { ascending: sortAsc, nullsFirst: false })
       .range(offset, offset + limit - 1)
 
     if (status) query = query.eq('status', status)
