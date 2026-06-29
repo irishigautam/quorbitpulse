@@ -35,6 +35,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/dashboard/candidates" className="hover:opacity-75 font-medium">
               Candidates
             </Link>
+            <Link href="/dashboard/pipeline" className="hover:opacity-75 font-medium">
+              Pipeline
+            </Link>
             <Link href="/dashboard/post" className="hover:opacity-75 font-medium" style={{ color: 'var(--accent)' }}>
               + Post a Job
             </Link>
