@@ -1,15 +1,15 @@
 import Razorpay from 'razorpay'
 import crypto from 'crypto'
 
-// Use placeholders during build if env vars are not set
+// Use || so empty string also falls back to placeholder
 export const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID ?? 'RAZORPAY_KEY_ID_NOT_SET',
-  key_secret: process.env.RAZORPAY_KEY_SECRET ?? 'RAZORPAY_KEY_SECRET_NOT_SET',
+  key_id: process.env.RAZORPAY_KEY_ID || 'RAZORPAY_KEY_ID_NOT_SET',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'RAZORPAY_KEY_SECRET_NOT_SET',
 })
 
 export function verifyWebhookSignature(body: string, signature: string): boolean {
   const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET ?? '')
+    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET || 'webhook_secret_not_set')
     .update(body)
     .digest('hex')
   return expectedSignature === signature
