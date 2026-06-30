@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 declare global {
@@ -20,7 +20,7 @@ interface RazorpayOptions {
   theme?: { color?: string }
 }
 
-export default function PaymentPage() {
+function PaymentContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isDev = searchParams.get('dev') === '1'
@@ -60,7 +60,6 @@ export default function PaymentPage() {
     setError('')
 
     try {
-      // Create Razorpay order
       const res = await fetch('/api/payments/create-order', { method: 'POST' })
       const { order } = await res.json()
 
@@ -71,7 +70,6 @@ export default function PaymentPage() {
         name: 'JobPulse by Quorbit',
         description: '₹3,999/year — 30 job postings',
         handler: async (response) => {
-          // Verify payment on server
           const verify = await fetch('/api/payments/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -112,7 +110,6 @@ export default function PaymentPage() {
           One payment. Post jobs for a full year.
         </p>
 
-        {/* Plan summary */}
         <div className="rounded-xl border-2 p-5 mb-6" style={{ borderColor: 'var(--accent)' }}>
           <div className="flex items-center justify-between mb-3">
             <span className="font-semibold" style={{ fontFamily: 'var(--font-display)' }}>
@@ -179,5 +176,17 @@ export default function PaymentPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function PaymentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-sm" style={{ color: 'var(--muted)' }}>Loading…</div>
+      </div>
+    }>
+      <PaymentContent />
+    </Suspense>
   )
 }
