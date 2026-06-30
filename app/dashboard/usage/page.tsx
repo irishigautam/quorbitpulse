@@ -31,7 +31,13 @@ export default async function UsageDashboardPage() {
     .eq('company_id', company.id)
     .not('match_score', 'is', null)
 
-  const { data: avgData } = await supabase.rpc('get_avg_match_score', { p_company_id: company.id }).single().catch(() => ({ data: null }))
+  let avgData: { avg_score: number } | null = null
+  try {
+    const { data } = await supabase.rpc('get_avg_match_score', { p_company_id: company.id }).single()
+    avgData = data
+  } catch {
+    avgData = null
+  }
 
   const { count: chatsSent } = await supabase
     .from('candidate_job_assignments')
