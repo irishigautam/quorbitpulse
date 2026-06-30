@@ -22,6 +22,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { parseExport } from '@/lib/llm-export/parsers'
 import { classifyAllConversations } from '@/lib/llm-export/privacy-classifier'
 import { extractSignals, mergeSignals } from '@/lib/llm-export/signal-extractor'
+import { rateLimit } from '@/lib/security/rate-limit'
+import { checkLimit, recordUsage } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 // Allow up to 10 MB for large export files
@@ -32,9 +34,27 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   try {
-    const { company } = await requireCompany()
+    const { company, companyId } = await requireCompany()
     const supabase = createServiceClient()
     const candidateId = params.id
+
+    // Rate limit: 3 LLM exports per hour per company (each triggers multiple Haiku calls)
+    const rl = rateLimit(companyId, { windowMs: 60 * 60_000, max: 3, keyPrefix: 'llm-export' })
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'LLM export rate limit reached. Max 3 per hour.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 3600) } },
+      )
+    }
+
+    // Subscription check — LLM export analysis is AI-heavy
+    const limitCheck = await checkLimit(companyId, company, 'import')
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { error: `Monthly AI processing limit reached (${limitCheck.current}/${limitCheck.limit}). Upgrade your plan.` },
+        { status: 402 },
+      )
+    }
 
     // Verify candidate belongs to company
     const { data: candidate, error: candErr } = await supabase
@@ -132,6 +152,13 @@ export async function POST(
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 })
     }
+
+    // Record AI usage for metering
+    await recordUsage(companyId, 'import', {
+      source: 'llm_export',
+      candidate_id: candidateId,
+      conversations_analysed: extracted.conversationsAnalysed,
+    }).catch(console.error)
 
     return NextResponse.json({
       candidateId,

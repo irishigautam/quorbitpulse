@@ -251,6 +251,17 @@ function domainScore(haystack: string, keywords: string[]): number {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate-limit by IP: 60 requests per hour to prevent data-scraping of our skill taxonomy
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const { rateLimit: rl } = await import('@/lib/security/rate-limit')
+  const result = rl(ip, { windowMs: 60 * 60_000, max: 60, keyPrefix: 'suggest-domain' })
+  if (!result.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded.' },
+      { status: 429, headers: { 'Retry-After': String(result.retryAfter ?? 3600) } },
+    )
+  }
+
   const { title = '', description = '', domain = '', minExperience = 0 } = await req.json()
 
   // Detect domain from title + description if not provided

@@ -36,29 +36,14 @@ export async function GET() {
   }
 }
 
-export async function PATCH(req: NextRequest) {
-  try {
-    const { company } = await requireCompany()
-    const supabase = createServiceClient()
-
-    const { plan_tier, billing_cycle } = await req.json()
-    const validTiers = ['starter', 'growth', 'scale']
-    if (!validTiers.includes(plan_tier)) {
-      return NextResponse.json({ error: 'Invalid plan tier' }, { status: 400 })
-    }
-
-    const { error } = await supabase
-      .from('companies')
-      .update({
-        plan_tier,
-        billing_cycle: billing_cycle ?? 'monthly',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', company.id)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ plan_tier, billing_cycle: billing_cycle ?? 'monthly' })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
-  }
+/**
+ * PATCH /api/billing/plan is intentionally disabled for self-service.
+ * Plan upgrades MUST go through Razorpay payment verification or the
+ * /api/webhooks/razorpay webhook. This prevents billing bypass.
+ */
+export async function PATCH() {
+  return NextResponse.json(
+    { error: 'Plan changes must go through the payment flow.' },
+    { status: 403 },
+  )
 }

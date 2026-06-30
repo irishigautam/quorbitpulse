@@ -9,8 +9,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'crypto'
 import { createServiceClient } from '@/lib/supabase/server'
+
+/** Constant-time string comparison to prevent timing attacks on signatures */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return cryptoTimingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
 import { normalise } from '@/lib/hrms/adapters'
 import type { HrmsPartner } from '@/lib/hrms/adapters'
 
@@ -49,15 +55,28 @@ export async function POST(
 
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
 
-  // Validate HMAC signature
+  // SECURITY: Signature is always required when a secret is configured.
+  // If no secret is configured for this company, reject — it means HRMS integration
+  // was not properly set up and unauthenticated requests must not be trusted.
+  if (!company.hrms_webhook_secret) {
+    return NextResponse.json(
+      { error: 'HRMS webhook not configured for this company. Set hrms_webhook_secret first.' },
+      { status: 403 },
+    )
+  }
+
   const sig = req.headers.get('x-quorbit-signature') ?? req.headers.get('x-hub-signature-256')
-  if (company.hrms_webhook_secret && sig) {
-    const expectedSig = 'sha256=' + createHmac('sha256', company.hrms_webhook_secret)
-      .update(rawBody)
-      .digest('hex')
-    if (sig !== expectedSig) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+  if (!sig) {
+    return NextResponse.json({ error: 'Missing signature header' }, { status: 401 })
+  }
+
+  const expectedSig = 'sha256=' + createHmac('sha256', company.hrms_webhook_secret)
+    .update(rawBody)
+    .digest('hex')
+
+  // Constant-time comparison to prevent timing attacks
+  if (!timingSafeEqual(sig, expectedSig)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   let payload: Record<string, unknown>

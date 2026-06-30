@@ -14,19 +14,44 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { requireCompany } from '@/lib/auth'
 import { buildProfileText, extractFingerprint } from '@/lib/scoring/fingerprint'
 import { computeMatchScore } from '@/lib/scoring/engine'
+import { LIMITS } from '@/lib/security/rate-limit'
+import { checkLimit, recordUsage } from '@/lib/subscription'
 
 export const dynamic = 'force-dynamic'
 
 const BATCH_CONCURRENCY = 3  // parallel Haiku calls
+// Hard cap: prevents a single call from burning hundreds of AI tokens
+const MAX_CANDIDATES_PER_BATCH = 50
 
 export async function POST(req: NextRequest) {
   try {
-    const { company } = await requireCompany()
+    const { company, companyId } = await requireCompany()
     const body = await req.json()
     const { job_id } = body
 
     if (!job_id) {
       return NextResponse.json({ error: 'job_id required' }, { status: 400 })
+    }
+
+    // Rate limit: 30 batch calls / hour / company (already set) — also check subscription
+    const rl = LIMITS.scoreBatch(companyId)
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Score batch rate limit reached. Max 30 batches per hour.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 3600) } },
+      )
+    }
+
+    // Subscription check: imports quota is shared with fingerprinting (both consume AI credits)
+    const limitCheck = await checkLimit(companyId, company, 'import')
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: `Monthly AI processing limit reached (${limitCheck.current}/${limitCheck.limit}). Upgrade your plan.`,
+          upgrade_url: '/onboarding/payment',
+        },
+        { status: 402 },
+      )
     }
 
     const supabase = createServiceClient()
@@ -54,8 +79,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ queued: 0, results: [] })
     }
 
-    // 3. Fetch candidate rows
-    const candidateIds = assignments.map(a => a.candidate_id)
+    // 3. Fetch candidate rows — capped to prevent runaway AI spend
+    const candidateIds = assignments.slice(0, MAX_CANDIDATES_PER_BATCH).map(a => a.candidate_id)
     const { data: candidates } = await supabase
       .from('imported_candidates')
       .select('*')
@@ -141,8 +166,19 @@ export async function POST(req: NextRequest) {
       }))
     }
 
+    // Record AI usage for metering (count successful fingerprints)
+    const successCount = results.filter(r => r.status === 'done').length
+    if (successCount > 0) {
+      await recordUsage(companyId, 'import', {
+        source: 'score_batch',
+        job_id,
+        candidates_scored: successCount,
+      }).catch(console.error)
+    }
+
     return NextResponse.json({
       queued: candidates.length,
+      capped_at: MAX_CANDIDATES_PER_BATCH,
       results,
     })
   } catch (err) {

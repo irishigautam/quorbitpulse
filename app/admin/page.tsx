@@ -1,24 +1,23 @@
 /**
  * mo9 — Internal admin panel (user + revenue view).
- * Protected by ADMIN_SECRET env var — passed as X-Admin-Secret header or ?secret= param.
- * NOT linked from the public nav. Access: /admin?secret=<ADMIN_SECRET>
+ * Protected by ADMIN_SECRET env var — passed ONLY via X-Admin-Secret header.
+ *
+ * SECURITY: ?secret= query-param access was removed — URL params appear in
+ * Vercel access logs, browser history, and referrer headers, which would
+ * expose the secret. Use a tool like Postman or curl with -H for access.
+ *
+ * Access: curl -H "x-admin-secret: <ADMIN_SECRET>" https://pulse.thequorbit.com/admin
  */
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
-import type { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-async function getSecret(): Promise<string | null> {
+export default async function AdminPage() {
   const h = await headers()
-  return h.get('x-admin-secret')
-}
-
-export default async function AdminPage({ searchParams }: { searchParams: { secret?: string } }) {
-  const headerSecret = await getSecret()
-  const secret = searchParams.secret ?? headerSecret
+  const secret = h.get('x-admin-secret')
   const adminSecret = process.env.ADMIN_SECRET
 
   if (!adminSecret || secret !== adminSecret) {
