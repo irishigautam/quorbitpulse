@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 declare global {
   interface Window {
@@ -22,6 +22,8 @@ interface RazorpayOptions {
 
 export default function PaymentPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isDev = searchParams.get('dev') === '1'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [scriptLoaded, setScriptLoaded] = useState(false)
@@ -33,6 +35,24 @@ export default function PaymentPage() {
     document.body.appendChild(script)
     return () => { document.body.removeChild(script) }
   }, [])
+
+  const handleDevActivate = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/payments/dev-activate', { method: 'POST' })
+      if (res.ok) {
+        router.push('/dashboard?welcome=1')
+      } else {
+        const j = await res.json()
+        setError(j.error ?? 'Dev activate failed')
+      }
+    } catch {
+      setError('Something went wrong.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handlePayment = async () => {
     if (!scriptLoaded) return setError('Payment system loading, please wait.')
@@ -141,6 +161,22 @@ export default function PaymentPage() {
         <p className="text-center text-xs mt-3" style={{ color: 'var(--muted)' }}>
           Secure payment via Razorpay. Instant activation.
         </p>
+
+        {isDev && (
+          <div className="mt-6 pt-5 border-t">
+            <p className="text-xs text-center mb-3 font-mono" style={{ color: 'var(--muted)' }}>
+              ⚙️ Dev mode — skip payment
+            </p>
+            <button
+              onClick={handleDevActivate}
+              disabled={loading}
+              className="w-full py-2 rounded-lg font-medium text-sm border-2 transition-colors"
+              style={{ borderColor: '#059669', color: '#059669' }}
+            >
+              {loading ? 'Activating…' : 'Activate without payment (dev only)'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
