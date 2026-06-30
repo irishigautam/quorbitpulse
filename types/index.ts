@@ -38,6 +38,8 @@ export interface Job {
   posted_at: string
   expires_at: string
   google_indexed: boolean
+  distributed_at: string | null
+  distribution_channels: Record<string, { status: string; url?: string; error?: string; distributed_at: string }> | null
   // Joined field (not in DB column)
   company?: Company
 }

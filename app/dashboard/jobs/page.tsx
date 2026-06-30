@@ -5,6 +5,13 @@ import type { Job } from '@/types'
 import { jobSlug } from '@/types'
 import JobActionsClient from './JobActionsClient'
 
+const CHANNEL_ICONS: Record<string, string> = {
+  indeed: '🔵',
+  google: '🔍',
+  linkedin: '💼',
+  naukri: '🟠',
+}
+
 function daysLeft(expires: string) {
   const diff = new Date(expires).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
@@ -109,7 +116,29 @@ export default async function MyJobsPage({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-4 pt-3 border-t">
+                {/* Distribution channel badges */}
+                {(job as any).distributed_at && (job as any).distribution_channels && (
+                  <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                    <span className="text-xs" style={{ color: 'var(--muted)' }}>Published to:</span>
+                    {Object.entries((job as any).distribution_channels as Record<string, { status: string; url?: string }>).map(
+                      ([ch, result]) => result.status === 'ok' ? (
+                        <a
+                          key={ch}
+                          href={result.url ?? '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`View on ${ch}`}
+                          className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={{ background: '#DCFCE7', color: '#166534', textDecoration: 'none' }}
+                        >
+                          {CHANNEL_ICONS[ch]} {ch.charAt(0).toUpperCase() + ch.slice(1)}
+                        </a>
+                      ) : null
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                   <a
                     href={`/jobs/${slug}`}
                     target="_blank"

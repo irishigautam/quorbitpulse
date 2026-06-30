@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { pingGoogleIndexing } from '@/lib/google-indexing'
 import { sendJobPostedEmail } from '@/lib/emails'
+import { distributeJob } from '@/lib/distribution'
 import { jobSlug } from '@/types'
 import type { PostJobFormValues } from '@/types'
 
@@ -62,11 +63,12 @@ export async function POST(req: NextRequest) {
     .update({ jobs_used: company.jobs_used + 1 })
     .eq('id', company.id)
 
-  // Fire and forget: Google Indexing + confirmation email
+  // Fire and forget: Google Indexing + confirmation email + multi-channel distribution
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
   const slug = jobSlug(job)
   pingGoogleIndexing(`${appUrl}/jobs/${slug}`)
   sendJobPostedEmail(company, job).catch(console.error)
+  distributeJob(job, company).catch(console.error)
 
   return NextResponse.json({ success: true, job })
 }
