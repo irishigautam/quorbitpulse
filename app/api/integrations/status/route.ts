@@ -16,7 +16,7 @@ export async function GET() {
 
   const { data: configs } = await supabase
     .from('integration_configs')
-    .select('platform, status, extra_key, connected_at, expires_at, last_used_at, error_message')
+    .select('platform, status, mode, connected_at, last_used_at')
     .eq('company_id', companyId)
 
   const configMap = new Map(
@@ -39,14 +39,10 @@ export async function GET() {
       quick_url: def.quick_url,
       key2_label: def.key2_label,
       available: def.available,
-      // Live status from DB
       status: cfg?.status ?? (def.connection_type === 'feed' ? 'connected' : 'disconnected'),
+      mode: cfg?.mode ?? null,
       connected_at: cfg?.connected_at ?? null,
-      expires_at: cfg?.expires_at ?? null,
       last_used_at: cfg?.last_used_at ?? null,
-      error_message: cfg?.error_message ?? null,
-      // Extra info (not the raw credentials)
-      extra_key: cfg?.extra_key ?? null,
     }
   })
 

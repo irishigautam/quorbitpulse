@@ -12,6 +12,7 @@
 import type { Job } from '@/types'
 import type { Database } from '@/types/supabase'
 import type { DistributionResult } from './indeed'
+import type { IntegrationConfig } from '@/lib/integrations/handlers'
 
 type Company = Database['public']['Tables']['companies']['Row']
 
@@ -20,18 +21,17 @@ const NAUKRI_API = 'https://www.naukri.com/jobapi/v1'
 
 export async function distributeToNaukri(
   job: Job,
-  company: Company
+  company: Company,
+  config?: IntegrationConfig
 ): Promise<DistributionResult> {
-  // Prefer company-level key, fall back to platform-level key
-  const apiKey =
-    (company as any).naukri_api_key ?? process.env.NAUKRI_API_KEY
-  const clientId =
-    (company as any).naukri_client_id ?? process.env.NAUKRI_CLIENT_ID
+  // Use provided config (owned or managed), or fall back to env vars for backward compat
+  const apiKey = config?.api_key ?? process.env.NAUKRI_API_KEY
+  const clientId = config?.extra_key ?? process.env.NAUKRI_CLIENT_ID
 
   if (!apiKey || !clientId) {
     return {
       status: 'skipped',
-      error: 'Naukri API key not configured — visit Settings → Distribution.',
+      error: 'Naukri API key not configured — connect your account in Integrations.',
       distributed_at: new Date().toISOString(),
     }
   }

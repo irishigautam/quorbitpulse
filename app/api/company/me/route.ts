@@ -12,7 +12,6 @@ export async function GET() {
   try {
     const { company } = await requireCompany()
 
-    // Return only safe / non-secret fields
     const safe = {
       id: company.id,
       name: company.name,
@@ -20,7 +19,6 @@ export async function GET() {
       plan_tier: company.plan_tier,
       linkedin_org_urn: (company as any).linkedin_org_urn ?? null,
       linkedin_token_expires_at: (company as any).linkedin_token_expires_at ?? null,
-      // Return boolean presence, not the actual token values
       linkedin_access_token: (company as any).linkedin_access_token ? '***' : null,
       naukri_api_key: (company as any).naukri_api_key ? '***' : null,
       naukri_client_id: (company as any).naukri_client_id ? '***' : null,

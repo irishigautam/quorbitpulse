@@ -1,13 +1,9 @@
 /**
- * Job distribution orchestrator — v2.
+ * Job distribution orchestrator.
  *
- * Reads connected integrations from the integration_configs table and fans out
- * to all active platforms in parallel. Results are saved back to jobs.distribution_channels.
- *
- * Auto-active (no config needed): google, indeed, glassdoor (feed)
- * OAuth-based: linkedin, wellfound
- * API-key-based: naukri, shine, timesjobs, ziprecruiter
- * Quick Post (no auto-distribute): iimjobs, hirist, internshala, apna, cutshort
+ * Always-on (feed, no credentials): google, indeed, glassdoor
+ * Owned only (recruiter connects their own account): linkedin, wellfound, naukri, shine, timesjobs, ziprecruiter
+ * Quick post (never auto-distributed): iimjobs, hirist, internshala, apna, cutshort
  */
 
 import { createServiceClient } from '@/lib/supabase/server'
@@ -37,7 +33,7 @@ export async function distributeJob(
 ): Promise<DistributionReport> {
   const supabase = createServiceClient()
 
-  // Load all connected integrations for this company
+  // Load all owned connected integrations for this company
   const { data: configs } = await supabase
     .from('integration_configs')
     .select('*')
@@ -48,46 +44,48 @@ export async function distributeJob(
     (configs ?? []).map((c: any) => [c.platform, c as IntegrationConfig])
   )
 
-  const get = (id: string): IntegrationConfig =>
-    configMap.get(id) ?? { platform: id, status: 'disconnected' }
+  const tasks: Record<string, () => Promise<PostResult>> = {}
 
-  // Build task list — auto-active + any connected platform
-  const tasks: Record<string, () => Promise<PostResult>> = {
-    google: async () => ({
-      status: 'ok' as const,
-      url: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/jobs/${job.id}`,
-      distributed_at: new Date().toISOString(),
-    }),
-    indeed: () => distributeToIndeed(job, company),
-    glassdoor: async () => ({
-      // Glassdoor ingests the Indeed XML feed; no separate call needed
-      status: 'ok' as const,
-      url: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/feeds/indeed`,
-      distributed_at: new Date().toISOString(),
-    }),
-  }
+  // ── Always-on feed platforms ─────────────────────────────────────
+  tasks.google = async () => ({
+    status: 'ok' as const,
+    url: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/jobs/${job.id}`,
+    distributed_at: new Date().toISOString(),
+  })
 
-  // Add connected OAuth / API-key platforms
-  if (configMap.has('linkedin')) tasks.linkedin = () => distributeToLinkedIn(job, company)
-  if (configMap.has('wellfound')) tasks.wellfound = () => postToWellfound(job, get('wellfound'))
-  if (configMap.has('naukri')) tasks.naukri = () => distributeToNaukri(job, company)
-  if (configMap.has('shine')) tasks.shine = () => postToShine(job, get('shine'))
-  if (configMap.has('timesjobs')) tasks.timesjobs = () => postToTimesJobs(job, get('timesjobs'))
-  if (configMap.has('ziprecruiter')) tasks.ziprecruiter = () => postToZipRecruiter(job, get('ziprecruiter'))
+  tasks.indeed = () => distributeToIndeed(job, company)
+
+  tasks.glassdoor = async () => ({
+    status: 'ok' as const,
+    url: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/feeds/indeed`,
+    distributed_at: new Date().toISOString(),
+  })
+
+  // ── Owned connections only ────────────────────────────────────────
+  if (configMap.has('linkedin'))    tasks.linkedin    = () => distributeToLinkedIn(job, company)
+  if (configMap.has('wellfound'))   tasks.wellfound   = () => postToWellfound(job, configMap.get('wellfound')!)
+  if (configMap.has('naukri'))      tasks.naukri      = () => distributeToNaukri(job, company, configMap.get('naukri'))
+  if (configMap.has('shine'))       tasks.shine       = () => postToShine(job, configMap.get('shine')!)
+  if (configMap.has('timesjobs'))   tasks.timesjobs   = () => postToTimesJobs(job, configMap.get('timesjobs')!)
+  if (configMap.has('ziprecruiter')) tasks.ziprecruiter = () => postToZipRecruiter(job, configMap.get('ziprecruiter')!)
 
   // Run all in parallel
   const entries = Object.entries(tasks)
-  const results = await Promise.all(entries.map(([, fn]) => fn().catch(e => ({
-    status: 'error' as const,
-    error: String(e),
-    distributed_at: new Date().toISOString(),
-  }))))
+  const results = await Promise.all(
+    entries.map(([, fn]) =>
+      fn().catch(e => ({
+        status: 'error' as const,
+        error: String(e),
+        distributed_at: new Date().toISOString(),
+      }))
+    )
+  )
 
   const report: DistributionReport = Object.fromEntries(
     entries.map(([id], i) => [id, results[i]])
   )
 
-  // Persist results to DB (best-effort)
+  // Persist results
   try {
     await supabase
       .from('jobs')
@@ -97,10 +95,10 @@ export async function distributeJob(
       })
       .eq('id', job.id)
 
-    // Update last_used_at for connected platforms
     const successIds = entries
       .filter((_, i) => results[i].status === 'ok')
       .map(([id]) => id)
+      .filter(id => configMap.has(id))
 
     if (successIds.length > 0) {
       await supabase
@@ -113,9 +111,7 @@ export async function distributeJob(
     console.error('[distribution] persist failed:', e)
   }
 
-  const summary = Object.entries(report)
-    .map(([ch, r]) => `${ch}=${r.status}`)
-    .join(' ')
+  const summary = Object.entries(report).map(([ch, r]) => `${ch}=${r.status}`).join(' ')
   console.log(`[distribution] job=${job.id} ${summary}`)
 
   return report

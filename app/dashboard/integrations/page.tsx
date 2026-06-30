@@ -19,10 +19,9 @@ interface Integration {
   key2_label?: string
   available: boolean
   status: string
+  mode: string | null
   connected_at?: string
-  expires_at?: string
   last_used_at?: string
-  extra_key?: string
 }
 
 function IntegrationsContent() {
@@ -34,6 +33,7 @@ function IntegrationsContent() {
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, { key: string; key2: string }>>({})
   const [expandedCard, setExpandedCard] = useState<string | null>(null)
   const [toast, setToast] = useState('')
+  const [toastError, setToastError] = useState(false)
 
   const successParam = searchParams.get('success')
   const errorParam = searchParams.get('error')
@@ -54,6 +54,7 @@ function IntegrationsContent() {
 
   function showToast(msg: string, isError = false) {
     setToast(msg)
+    setToastError(isError)
     setTimeout(() => setToast(''), 4000)
   }
 
@@ -62,7 +63,6 @@ function IntegrationsContent() {
     if (!integ) return
 
     if (integ.connection_type === 'oauth') {
-      // Redirect to OAuth
       if (id === 'linkedin') {
         const params = new URLSearchParams({
           response_type: 'code',
@@ -85,7 +85,6 @@ function IntegrationsContent() {
 
     if (integ.connection_type === 'api_key') {
       setExpandedCard(expandedCard === id ? null : id)
-      return
     }
   }
 
@@ -101,7 +100,10 @@ function IntegrationsContent() {
     })
 
     if (res.ok) {
-      setIntegrations(prev => prev.map(i => i.id === id ? { ...i, status: 'connected', connected_at: new Date().toISOString() } : i))
+      setIntegrations(prev => prev.map(i => i.id === id
+        ? { ...i, status: 'connected', mode: 'owned', connected_at: new Date().toISOString() }
+        : i
+      ))
       setExpandedCard(null)
       setApiKeyInputs(prev => ({ ...prev, [id]: { key: '', key2: '' } }))
       showToast(`✓ ${integrations.find(i => i.id === id)?.name} connected!`)
@@ -118,7 +120,10 @@ function IntegrationsContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ platform: id }),
     })
-    setIntegrations(prev => prev.map(i => i.id === id ? { ...i, status: 'disconnected', connected_at: undefined } : i))
+    setIntegrations(prev => prev.map(i => i.id === id
+      ? { ...i, status: 'disconnected', mode: null, connected_at: undefined }
+      : i
+    ))
     showToast(`${integrations.find(i => i.id === id)?.name} disconnected.`)
     setConnecting(null)
   }
@@ -142,7 +147,7 @@ function IntegrationsContent() {
               Integrations
             </h1>
             <p style={{ color: 'var(--muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              Connect job portals — new jobs auto-publish to all connected platforms.
+              Connect your recruiter accounts — new jobs auto-publish to all connected platforms.
             </p>
           </div>
           <div style={{ background: '#EEF2FF', color: '#4338CA', padding: '6px 16px', borderRadius: 999, fontSize: '0.85rem', fontWeight: 600 }}>
@@ -153,7 +158,15 @@ function IntegrationsContent() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ background: toast.startsWith('⚠') ? '#FEE2E2' : '#DCFCE7', color: toast.startsWith('⚠') ? '#991B1B' : '#166534', padding: '0.75rem 1rem', borderRadius: 8, marginBottom: '1rem', fontSize: '0.875rem', fontWeight: 500 }}>
+        <div style={{
+          background: toastError ? '#FEE2E2' : '#DCFCE7',
+          color: toastError ? '#991B1B' : '#166534',
+          padding: '0.75rem 1rem',
+          borderRadius: 8,
+          marginBottom: '1rem',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+        }}>
           {toast}
         </div>
       )}
@@ -228,6 +241,7 @@ function IntegrationCard({
   appUrl: string
 }) {
   const isConnected = integ.status === 'connected'
+  const isFeed = integ.connection_type === 'feed'
   const feedUrl = integ.feed_path ? `${appUrl}${integ.feed_path}` : ''
 
   return (
@@ -239,7 +253,6 @@ function IntegrationCard({
       display: 'flex',
       flexDirection: 'column',
       gap: '0.75rem',
-      transition: 'border-color 0.15s',
     }}>
       {/* Top row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
@@ -267,7 +280,7 @@ function IntegrationCard({
               background: isConnected ? '#DCFCE7' : '#F3F4F6',
               color: isConnected ? '#166534' : '#6B7280',
             }}>
-              {isConnected ? '● Connected' : integ.connection_type === 'feed' ? '● Auto-active' : '○ Not connected'}
+              {isConnected ? '● Connected' : isFeed ? '● Always active' : '○ Not connected'}
             </span>
           </div>
           <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '0.2rem 0 0', lineHeight: 1.4 }}>
@@ -284,7 +297,7 @@ function IntegrationCard({
           </span>
         ))}
         <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: '#EEF2FF', color: '#4338CA' }}>
-          {integ.connection_type === 'oauth' ? '🔑 OAuth' : integ.connection_type === 'api_key' ? '🔐 API Key' : integ.connection_type === 'feed' ? '📡 XML Feed' : '⚡ Quick Post'}
+          {integ.connection_type === 'oauth' ? '🔑 OAuth' : integ.connection_type === 'api_key' ? '🔐 API Key' : integ.connection_type === 'feed' ? '📡 Auto' : '⚡ Quick Post'}
         </span>
       </div>
 
@@ -297,7 +310,7 @@ function IntegrationCard({
       )}
 
       {/* Feed URL */}
-      {integ.connection_type === 'feed' && feedUrl && (
+      {isFeed && feedUrl && (
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
           <code style={{ flex: 1, background: '#F3F4F6', padding: '0.4rem 0.6rem', borderRadius: 6, fontSize: '0.75rem', wordBreak: 'break-all' }}>
             {feedUrl}
@@ -319,7 +332,7 @@ function IntegrationCard({
 
       {/* API key form */}
       {integ.connection_type === 'api_key' && isExpanded && !isConnected && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: '#F9FAFB', borderRadius: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: '#F9FAFB', borderRadius: 8, border: '1px solid var(--border)' }}>
           <input
             type="text"
             placeholder="API Key"
@@ -356,51 +369,37 @@ function IntegrationCard({
 
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
-        {integ.connection_type === 'feed' ? null : isConnected ? (
-          <button
-            onClick={onDisconnect}
-            disabled={isConnecting}
-            style={{ fontSize: '0.8rem', color: '#DC2626', background: 'none', border: '1px solid #FECACA', borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer' }}
-          >
-            Disconnect
-          </button>
-        ) : integ.connection_type === 'quick' ? (
-          <a
-            href={integ.quick_url?.replace('{title}', 'Job Opening').replace('{company}', '').replace('{location}', '').replace('{description}', '') ?? '#'}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-block',
-              padding: '0.4rem 0.875rem',
-              background: integ.color,
-              color: '#fff',
-              borderRadius: 6,
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
-          >
-            Quick Post ↗
-          </a>
-        ) : (
-          <button
-            onClick={onConnect}
-            disabled={isConnecting}
-            style={{
-              padding: '0.4rem 0.875rem',
-              background: integ.color,
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            {integ.connection_type === 'oauth' ? 'Connect →' : isExpanded ? 'Enter credentials ↑' : 'Connect →'}
-          </button>
-        )}
-        {integ.docs_url && integ.connection_type !== 'feed' && (
+        {isFeed ? null
+          : isConnected ? (
+            <button
+              onClick={onDisconnect}
+              disabled={isConnecting}
+              style={{ fontSize: '0.8rem', color: '#DC2626', background: 'none', border: '1px solid #FECACA', borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer' }}
+            >
+              Disconnect
+            </button>
+          )
+          : integ.connection_type === 'quick' ? (
+            <a
+              href={integ.quick_url?.replace('{title}', 'Job Opening').replace('{company}', '').replace('{location}', '').replace('{description}', '') ?? '#'}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'inline-block', padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+            >
+              Quick Post ↗
+            </a>
+          )
+          : (
+            <button
+              onClick={onConnect}
+              disabled={isConnecting}
+              style={{ padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              {integ.connection_type === 'api_key' ? (isExpanded ? 'Cancel ↑' : 'Connect →') : 'Connect →'}
+            </button>
+          )
+        }
+        {integ.docs_url && !isFeed && !isConnected && (
           <a href={integ.docs_url} target="_blank" rel="noreferrer"
             style={{ padding: '0.4rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'var(--muted)' }}>
             Docs ↗
