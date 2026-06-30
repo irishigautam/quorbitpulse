@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { company } = await requireCompany()
+  const { company, role } = await requireCompany()
 
   async function signOut() {
     'use server'
@@ -41,6 +41,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/dashboard/integrations" className="hover:opacity-75 font-medium">
               Integrations
             </Link>
+            {role === 'admin' && (
+              <Link href="/dashboard/team" className="hover:opacity-75 font-medium">
+                Team
+              </Link>
+            )}
             <Link href="/dashboard/post" className="hover:opacity-75 font-medium" style={{ color: 'var(--accent)' }}>
               + Post a Job
             </Link>
@@ -52,11 +57,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
             {company.name}
           </span>
           <Link
-            href="/jobs"
+            href={`/company/${(company as any).slug ?? ''}`}
             target="_blank"
             className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50"
           >
-            View board ↗
+            Company page ↗
           </Link>
           <form action={signOut}>
             <button type="submit" className="text-xs text-gray-500 hover:text-gray-900">
