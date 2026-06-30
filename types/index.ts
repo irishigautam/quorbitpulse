@@ -198,6 +198,98 @@ export interface CsvCandidateRow {
   [key: string]: string | undefined
 }
 
+// ---- Candidate Profile (candidate-side auth) ----
+
+export type SelfServiceStatus = 'incomplete' | 'active' | 'hidden'
+
+export interface CandidateProfile {
+  id: string
+  user_id: string
+  full_name: string
+  email: string
+  location: string | null
+  linkedin_url: string | null
+  current_title: string | null
+  current_company: string | null
+  resume_url: string | null
+  resume_text: string | null
+  public_slug: string           // URL-safe unique slug for /candidate/profile/[slug]
+  status: SelfServiceStatus
+  // Fingerprint (extracted from resume)
+  skills: string[]
+  domain: string[]
+  seniority: SeniorityLevel | null
+  years_experience: number | null
+  fingerprint_summary: string | null
+  resume_processed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CandidateApplication {
+  id: string
+  candidate_id: string
+  job_id: string
+  company_id: string
+  match_score: number | null
+  status: 'pending' | 'viewed' | 'shortlisted' | 'rejected'
+  applied_at: string
+  // Joined
+  job?: Pick<Job, 'id' | 'title' | 'location' | 'job_type' | 'remote' | 'company'>
+}
+
+// ---- Subscription / Metering ----
+
+export type PlanTier = 'starter' | 'growth' | 'scale'
+
+export interface PlanLimits {
+  imports_per_month: number      // -1 = unlimited
+  chats_per_month: number        // -1 = unlimited
+  jobs_quota: number
+}
+
+export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
+  starter: { imports_per_month: 50,  chats_per_month: 20,  jobs_quota: 3  },
+  growth:  { imports_per_month: 250, chats_per_month: 100, jobs_quota: 10 },
+  scale:   { imports_per_month: -1,  chats_per_month: -1,  jobs_quota: 50 },
+}
+
+export interface UsageEvent {
+  id: string
+  company_id: string
+  event_type: 'import' | 'chat' | 'score'
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+// ---- Job Supply ----
+
+export type JobSource = 'adzuna' | 'schema_org' | 'apify' | 'direct'
+
+export interface JobListing {
+  id: string
+  external_id: string | null
+  source: JobSource
+  title: string
+  company_name: string
+  location: string
+  description: string | null
+  url: string
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string
+  skills: string[]
+  domain: string[]
+  seniority: SeniorityLevel | null
+  min_experience: number | null
+  remote: boolean
+  posted_at: string | null
+  expires_at: string | null
+  enriched: boolean
+  dedup_hash: string | null
+  created_at: string
+}
+
 // ---- Slug helpers ----
 export function jobSlug(job: Pick<Job, 'id' | 'title'>): string {
   const titleSlug = job.title
