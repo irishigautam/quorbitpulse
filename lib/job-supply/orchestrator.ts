@@ -7,6 +7,7 @@
  *   - Remotive (free, no key)
  *   - Arbeitnow (free, no key)
  *   - Jobicy (free, no key)
+ *   - Career page scraper (career_page_sources table)
  */
 
 import { createServiceClient } from '@/lib/supabase/server'
@@ -15,6 +16,7 @@ import { fetchAllGoogleJobs } from './serpapi'
 import { fetchRemotiveJobs } from './remotive'
 import { fetchArbeitnowJobs } from './arbeitnow'
 import { fetchJobicyJobs } from './jobicy'
+import { scrapeCareerPage } from './career-scraper'
 import { enrichJob } from './enrichment'
 import { prepareForUpsert, computeDedupHash } from './dedup'
 import type { RawJobListing } from './dedup'
@@ -128,7 +130,79 @@ async function fetchFromAllSources(
     sources['jobicy'] = 0
   }
 
+  // 6. Career page scraper (company-specific career pages)
+  try {
+    const careerJobs = await fetchFromCareerPages()
+    allJobs.push(...careerJobs.jobs)
+    sources['career_page'] = careerJobs.jobs.length
+  } catch (err) {
+    console.error('Career page scraper error:', err)
+    sources['career_page'] = 0
+  }
+
   return { jobs: allJobs, sources }
+}
+
+// ── Career page scraper ────────────────────────────────────────────────────
+
+async function fetchFromCareerPages(): Promise<{ jobs: RawJobListing[] }> {
+  const supabase = createServiceClient()
+
+  const { data: sources, error } = await supabase
+    .from('career_page_sources')
+    .select('id, company_name, career_url, ats_type, ats_slug')
+    .eq('active', true)
+    .order('last_scraped_at', { ascending: true, nullsFirst: true })
+    .limit(20)  // Process up to 20 sources per cron run to stay within time limit
+
+  if (error || !sources?.length) return { jobs: [] }
+
+  const allJobs: RawJobListing[] = []
+
+  for (const source of sources) {
+    try {
+      const result = await scrapeCareerPage(
+        source.career_url,
+        source.company_name,
+        {
+          knownAtsType: source.ats_type as any,
+          knownAtsSlug: source.ats_slug,
+        }
+      )
+
+      allJobs.push(...result.jobs)
+
+      // Update source stats + detected ATS type
+      await supabase
+        .from('career_page_sources')
+        .update({
+          last_scraped_at: new Date().toISOString(),
+          last_jobs_found: result.jobs.length,
+          total_jobs_ingested: supabase.rpc ? undefined : undefined,  // handled by trigger
+          ats_type: result.ats_type,
+          ats_slug: result.ats_slug,
+          last_error: result.error ?? null,
+          error_count: result.error ? (source as any).error_count + 1 : 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', source.id)
+
+      await delay(500)  // be polite to servers
+    } catch (err) {
+      console.error(`Career page error for ${source.company_name}:`, err)
+      await supabase
+        .from('career_page_sources')
+        .update({
+          last_scraped_at: new Date().toISOString(),
+          last_error: (err as Error).message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', source.id)
+    }
+  }
+
+  console.log(`Career pages: ${allJobs.length} jobs from ${sources.length} sources`)
+  return { jobs: allJobs }
 }
 
 // ── Deduplicate within the current batch ──────────────────────────────────

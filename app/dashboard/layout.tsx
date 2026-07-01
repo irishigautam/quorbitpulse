@@ -41,6 +41,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/dashboard/integrations" className="hover:opacity-75 font-medium">
               Integrations
             </Link>
+            <Link href="/dashboard/job-sources" className="hover:opacity-75 font-medium">
+              Job Sources
+            </Link>
             {role === 'admin' && (
               <Link href="/dashboard/team" className="hover:opacity-75 font-medium">
                 Team

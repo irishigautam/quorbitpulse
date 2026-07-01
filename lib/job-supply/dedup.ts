@@ -18,7 +18,7 @@ export interface RawJobListing {
   remote?: boolean
   posted_at?: string | null
   expires_at?: string | null
-  source: 'adzuna' | 'schema_org' | 'apify' | 'direct' | 'serpapi' | 'remotive' | 'arbeitnow' | 'jobicy'
+  source: 'adzuna' | 'schema_org' | 'apify' | 'direct' | 'serpapi' | 'remotive' | 'arbeitnow' | 'jobicy' | 'career_page'
   external_id?: string | null
   skills?: string[]
   domain?: string[]
