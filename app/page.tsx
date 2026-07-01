@@ -44,7 +44,7 @@ export default function LandingPage() {
               className="hidden sm:inline">
               API docs
             </Link>
-            <Link href="/dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>
+            <Link href="/onboarding/login" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>
               Sign in
             </Link>
             <Link href="/onboarding/signup"
