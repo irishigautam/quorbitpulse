@@ -153,7 +153,7 @@ export default function SignupPage() {
 
         <p className="text-center text-xs mt-4" style={{ color: 'var(--muted)' }}>
           Already have an account?{' '}
-          <Link href="/dashboard" className="underline" style={{ color: 'var(--accent)' }}>
+          <Link href="/onboarding/login" className="underline" style={{ color: 'var(--accent)' }}>
             Sign in
           </Link>
         </p>

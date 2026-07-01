@@ -22,7 +22,7 @@ export async function requireCompany(): Promise<{ userId: string; companyId: str
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/onboarding/signup')
+  if (!user) redirect('/onboarding/login')
 
   // Look up membership — join to company in one query
   const { data: membership } = await supabase
@@ -42,7 +42,7 @@ export async function requireCompany(): Promise<{ userId: string; companyId: str
       .eq('user_id', user.id)
       .single()
 
-    if (!ownedCompany) redirect('/onboarding/signup')
+    if (!ownedCompany) redirect('/onboarding/login')
 
     // Auto-create member entry for legacy owner
     const svc = createServiceClient()
