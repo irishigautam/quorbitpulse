@@ -24,9 +24,14 @@ export default function LoginPage() {
 
     if (authError) {
       setLoading(false)
-      setError(authError.message === 'Invalid login credentials'
-        ? 'Incorrect email or password.'
-        : authError.message)
+      const msg = typeof authError.message === 'string' ? authError.message : ''
+      if (!msg || msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credentials')) {
+        setError('Incorrect email or password.')
+      } else if (msg.toLowerCase().includes('confirm') || msg.toLowerCase().includes('verified')) {
+        setError('Please confirm your email address before signing in.')
+      } else {
+        setError(msg || 'Sign in failed. Please try again.')
+      }
       return
     }
 
