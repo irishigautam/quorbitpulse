@@ -1,22 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 export default function LoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (searchParams.get('error') === 'link_expired') {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error') === 'link_expired') {
       setError('That link has expired or already been used. Request a new one below.')
     }
-  }, [searchParams])
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
