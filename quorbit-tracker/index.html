@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quorbit — Product Tracker</title>
+<style>
+:root { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #F7F6F3;
+  color: #1a1a1a;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 0;
+}
+
+.header {
+  background: #fff;
+  border-bottom: 1px solid #E5E4E0;
+  padding: 20px 24px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-dot {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: #1a1a1a; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0;
+}
+.brand-dot svg { width: 18px; height: 18px; }
+.brand-name { font-size: 17px; font-weight: 600; color: #1a1a1a; }
+.brand-sub { font-size: 12px; color: #888; margin-top: 1px; }
+
+.last-updated { font-size: 11px; color: #aaa; white-space: nowrap; padding-top: 4px; }
+
+.objective-box {
+  background: #F0EEF9;
+  border: 1px solid #C8C3EE;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.objective-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #7B72CC; margin-bottom: 4px; }
+.objective-text { font-size: 12px; color: #3D3580; line-height: 1.6; }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.stat-card {
+  background: #F7F6F3;
+  border: 1px solid #E5E4E0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: center;
+}
+.stat-val { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+.stat-label { font-size: 10px; color: #888; margin-top: 1px; }
+
+.moat-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.moat-pill {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.moat-pill.a { background: #E6F3FF; color: #1565C0; }
+.moat-pill.b { background: #E8F5E9; color: #2E7D32; }
+.moat-pill.c { background: #FFF3E0; color: #E65100; }
+.moat-pill.d { background: #F3E5F5; color: #6A1B9A; }
+
+.content { padding: 16px; }
+
+.legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.legend-label { font-size: 11px; color: #888; margin-right: 4px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+.phase-card {
+  background: #fff;
+  border: 1px solid #E5E4E0;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #E5E4E0;
+  transition: background 0.1s;
+}
+.phase-header:hover { background: #FAFAF8; }
+
+.phase-num {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; flex-shrink: 0;
+}
+
+.phase-title { font-size: 14px; font-weight: 600; color: #1a1a1a; flex: 1; }
+.phase-subtitle { font-size: 11px; color: #888; }
+
+.phase-progress-text { font-size: 11px; color: #888; white-space: nowrap; }
+.phase-bar-wrap { width: 80px; height: 5px; background: #F0EEE8; border-radius: 3px; flex-shrink: 0; }
+.phase-bar { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.phase-chevron { font-size: 12px; color: #aaa; transition: transform 0.2s; flex-shrink: 0; }
+.phase-chevron.open { transform: rotate(90deg); }
+
+.phase-body { padding: 0 0 4px; }
+.phase-body.hidden { display: none; }
+
+.item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #F5F4F0;
+  transition: background 0.1s;
+}
+.item-row:last-child { border-bottom: none; }
+.item-row:hover { background: #FAFAF8; }
+
+.status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 1px solid transparent;
+  transition: opacity 0.15s;
+  user-select: none;
+  letter-spacing: .02em;
+}
+.status-badge:hover { opacity: 0.75; }
+.status-badge.built { background: #E8F5E9; color: #2E7D32; border-color: #A5D6A7; }
+.status-badge.in-progress { background: #E3F2FD; color: #1565C0; border-color: #90CAF9; }
+.status-badge.planned { background: #F5F4F0; color: #777; border-color: #DDDBD5; }
+.status-badge.blocked { background: #FFF3E0; color: #E65100; border-color: #FFCC80; }
+
+.item-name { font-size: 13px; color: #1a1a1a; flex: 1; }
+.item-note { font-size: 11px; color: #999; margin-top: 2px; font-style: italic; }
+
+.phase-group-label {
+  padding: 8px 16px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #bbb;
+}
+
+.overall-bar-wrap {
+  height: 6px;
+  background: #F0EEE8;
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.overall-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #66BB6A);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.note-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #FFF9E6;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.reset-btn {
+  font-size: 10px;
+  color: #bbb;
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.reset-btn:hover { color: #888; border-color: #bbb; }
+
+.phase-color-0 { background: #E8F5E9; color: #2E7D32; }
+.phase-color-1 { background: #E3F2FD; color: #1565C0; }
+.phase-color-2 { background: #F3E5F5; color: #6A1B9A; }
+.phase-color-3 { background: #FFF3E0; color: #E65100; }
+.phase-color-4 { background: #FCE4EC; color: #880E4F; }
+.phase-color-5 { background: #E0F2F1; color: #00695C; }
+.phase-color-6 { background: #FFF8E1; color: #F57F17; }
+
+.phase-bar-0 { background: #4CAF50; }
+.phase-bar-1 { background: #2196F3; }
+.phase-bar-2 { background: #9C27B0; }
+.phase-bar-3 { background: #FF9800; }
+.phase-bar-4 { background: #E91E63; }
+.phase-bar-5 { background: #009688; }
+.phase-bar-6 { background: #FFC107; }
+
+footer {
+  text-align: center;
+  padding: 16px;
+  font-size: 11px;
+  color: #bbb;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="brand">
+      <div class="brand-dot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Quorbit</div>
+        <div class="brand-sub">Product Build Tracker</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="reset-btn" onclick="resetAll()">Reset all</button>
+      <span class="last-updated" id="lastUpdated">Not yet updated</span>
+    </div>
+  </div>
+
+  <div class="objective-box">
+    <div class="objective-label">Product Objective</div>
+    <div class="objective-text">
+      A matching intelligence layer for Indian SMBs and startups. Companies post jobs and import candidates sourced from LinkedIn, Apollo, and Naukri into a unified dashboard — Quorbit auto-scores each candidate (0–100) against the job fingerprint. Top-scoring candidates receive an AI chat conversation that assesses job readiness. Candidate self-signup is secondary — companies bring their own pipeline first. Long-term moat: LLM conversation history (ChatGPT/Claude exports) becomes a passive ambient signal layer no other platform has.
+    </div>
+  </div>
+
+  <div class="moat-row">
+    <span class="moat-pill a">🏢 Business-side first</span>
+    <span class="moat-pill b">💰 Companies pay · Candidates free</span>
+    <span class="moat-pill c">🤖 Score → Chat → Hire</span>
+    <span class="moat-pill d">🔒 LLM conversation = the moat</span>
+  </div>
+
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card"><div class="stat-val" id="s-total">0</div><div class="stat-label">Total items</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-built" style="color:#2E7D32">0</div><div class="stat-label">Built</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-progress" style="color:#1565C0">0</div><div class="stat-label">In progress</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-planned" style="color:#888">0</div><div class="stat-label">Planned</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-pct" style="color:#1a1a1a">0%</div><div class="stat-label">Complete</div></div>
+  </div>
+  <div class="overall-bar-wrap">
+    <div class="overall-bar" id="overallBar" style="width:0%"></div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="legend">
+    <span class="legend-label">Status:</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#4CAF50; border:1px solid #A5D6A7"></span>Built</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#2196F3; border:1px solid #90CAF9"></span>In progress</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#ddd; border:1px solid #ccc"></span>Planned</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#FF9800; border:1px solid #FFCC80"></span>Blocked</span>
+    <span style="font-size:11px; color:#aaa; margin-left:4px;">Click any badge to update status</span>
+  </div>
+
+  <div id="phaseContainer"></div>
+</div>
+
+<footer>Quorbit · v9 — Business-first strategy · Click badges to update · Auto-saved · Live: <a href="https://pulse.thequorbit.com" target="_blank" style="color:#2196F3; text-decoration:none;">pulse.thequorbit.com</a></footer>
+
+<script>
+const PHASES = [
+  {
+    id: 'foundation',
+    name: 'Phase 0 — Foundation',
+    subtitle: 'Core infrastructure — company auth, job posting, MCP, payments',
+    colorClass: 0,
+    items: [
+      { id: 'f1', name: 'Company auth + signup (Supabase)', status: 'built', note: 'Email confirmation disabled on free tier' },
+      { id: 'f2', name: 'Company onboarding flow', status: 'built' },
+      { id: 'f3', name: 'Job posting form (full field set)', status: 'built', note: 'Title, type, location, description, salary, apply method, expiry' },
+      { id: 'f4', name: 'Domain auto-detection (12 domains)', status: 'built', note: 'Salesforce, Frontend, Backend, Fullstack, Data & ML, DevOps, Product, Design, Marketing, Sales, Mobile, Security' },
+      { id: 'f5', name: 'Seniority detection engine', status: 'built', note: 'Title keywords + YOE → 6 levels with conflict resolution' },
+      { id: 'f6', name: 'Skill chip system (domain + cross-role)', status: 'built', note: 'Domain skills per seniority level; blue + purple chip groups' },
+      { id: 'f7', name: 'Job DB schema (domain, min_experience, skills)', status: 'built', note: 'GIN indexes on skills[] and domain[]' },
+      { id: 'f8', name: 'Public job board (search UI)', status: 'built' },
+      { id: 'f9', name: 'Public REST API', status: 'built', note: 'Needs open/unauthenticated read tier + enrichment filter params' },
+      { id: 'f10', name: 'MCP server for AI assistants', status: 'built', note: 'Claude and other LLMs can query live jobs' },
+      { id: 'f11', name: 'RSS feed', status: 'built' },
+      { id: 'f12', name: 'Google Indexing integration', status: 'built', note: 'Pings Google on each new job post' },
+      { id: 'f13', name: 'Transactional emails (Resend)', status: 'built', note: 'Job posted + welcome email' },
+      { id: 'f14', name: 'Payment flow (Razorpay)', status: 'blocked', note: 'Built but production keys not configured — blocked on business registration' },
+      { id: 'f15', name: 'Coupon / promo code system', status: 'built', note: 'Codes moved to COUPON_CODES env var in Vercel (old hardcoded codes removed from source as security fix). Rate-limited 5 attempts/hour/user. Rotate via Vercel env var — no code deploy needed.' },
+      { id: 'f16', name: 'Company dashboard', status: 'built' },
+    ]
+  },
+  {
+    id: 'import',
+    name: 'Phase 1 — Candidate Import Engine',
+    subtitle: 'Companies bring candidates from LinkedIn, Apollo, Naukri into the dashboard',
+    colorClass: 1,
+    items: [
+      { id: 'imp1', name: 'Chrome extension — LinkedIn profile capture', status: 'built', note: 'Manifest v3 extension. Content script on linkedin.com/in/* injects "Save to Quorbit" button, parses DOM for name/title/company/skills. POST to /api/ext/capture with Bearer API key. Background service worker handles auth + dedup.' },
+      { id: 'imp2', name: 'Chrome extension — Naukri profile capture', status: 'built', note: 'Same extension, Naukri profile pages. Content script at naukri.com/*. Extracts name, title, company, location, YOE, skills. Same /api/ext/capture backend.' },
+      { id: 'imp3', name: 'Apollo.io API integration', status: 'built', note: 'Bring-your-own-key: recruiter pastes their Apollo API key. POST /api/candidates/import/apollo — searches Apollo people API by title/location, imports results into candidate pool. No Quorbit Apollo account needed.' },
+      { id: 'imp4', name: 'CSV / Excel bulk import', status: 'built', note: 'Universal fallback. Standard columns: name, email, LinkedIn URL, current title, company. Works for any sourcing tool.' },
+      { id: 'imp5', name: 'Imported candidate DB schema', status: 'built', note: 'Stores raw import source + enriched fingerprint. Linked to company account + specific job.' },
+      { id: 'imp6', name: 'Deduplication on import', status: 'built', note: 'Same candidate via LinkedIn + Apollo → merge into one profile. Match on email + LinkedIn URL.' },
+      { id: 'imp7', name: 'Candidate pool dashboard (per company)', status: 'built', note: 'All imported candidates in one view. Filter by job, stage, score, source.' },
+      { id: 'imp8', name: 'Assign candidate to job opening', status: 'built', note: 'One imported candidate evaluated against multiple open roles.' },
+    ]
+  },
+  {
+    id: 'scoring',
+    name: 'Phase 2 — AI Scoring Engine',
+    subtitle: 'Auto-score every imported candidate against the job fingerprint (0–100)',
+    colorClass: 2,
+    items: [
+      { id: 'sc1', name: 'Imported profile → fingerprint extraction (Claude Haiku)', status: 'built', note: 'Parse LinkedIn/Apollo profile text → domain[], seniority, skills[], YOE. Reuses existing suggest-domain engine.' },
+      { id: 'sc2', name: 'Match score algorithm (0–100)', status: 'built', note: 'Weighted: domain match (30pts) + seniority (20pts) + skill overlap (25pts) + experience years (25pts)' },
+      { id: 'sc3', name: 'Domain adjacency map (exact + adjacent)', status: 'built', note: 'Fullstack ↔ Frontend/Backend; Data & ML ↔ Backend; DevOps ↔ Backend. Prevents false negatives.' },
+      { id: 'sc4', name: 'Seniority match with ±1 level tolerance', status: 'built' },
+      { id: 'sc5', name: 'Skill overlap % calculation', status: 'built', note: 'Candidate skills ∩ job required skills / total required skills. GIN index query.' },
+      { id: 'sc6', name: 'Score breakdown panel (why this score)', status: 'built', note: 'Recruiter sees: Domain ✓, Seniority ✓, Missing: [React, TypeScript]. Not a black box.' },
+      { id: 'sc7', name: 'Ranked candidate list per job opening', status: 'built', note: 'Replaces chronological import list. Top-scoring candidates surface first.' },
+      { id: 'sc8', name: 'Match-to-find ratio dashboard', status: 'built', note: 'Core ROI metric: % of imported candidates scoring >70. Shows recruiter whether their sourcing is on target. Primary revenue justification.' },
+    ]
+  },
+  {
+    id: 'llm-chat',
+    name: 'Phase 3 — LLM Chat Validation',
+    subtitle: 'The moat — AI conversation sent to top scorers to validate job readiness',
+    colorClass: 3,
+    items: [
+      { id: 'lc1', name: 'Candidate consent + contact capture', status: 'built', note: 'CookieConsent banner on all pages. Accept loads GA via next/script (afterInteractive, anonymize_ip). Decline blocks GA forever. Stored in localStorage. Controlled by NEXT_PUBLIC_GA_ID env var.' },
+      { id: 'lc2', name: 'AI chat conversation UI (candidate-facing)', status: 'built', note: 'Mobile-first chat UI at /chat/[token]. No login required. HMAC-signed 7-day token. Works in any browser.' },
+      { id: 'lc3', name: 'Job readiness question set (6 questions)', status: 'built', note: '6-question Claude Haiku conversation: current role, role interest, technical challenge, learning style, team preference, compensation. Adaptive and natural.' },
+      { id: 'lc4', name: 'Auto-trigger: send chat to top-N candidates per job', status: 'built', note: 'POST /api/candidates/send-chat-batch. Purple card in dashboard: job picker + Top N selector (3/5/10/15/20) + 🚀 Send invites. Skips already-contacted. Rate limited 3 batch sends/hr, max 20 per call.' },
+      { id: 'lc5', name: 'Chat response → structured readiness score', status: 'built', note: 'Claude Haiku scores 0–100 at end of conversation. READINESS_SCORE extracted from final message, stored in chat_sessions table.' },
+      { id: 'lc6', name: 'Combined score: fingerprint (70%) + chat (30%)', status: 'built', note: 'computeBlendedScore() in lib/scoring/blended.ts. POST /api/candidates/blend-scores recomputes for all candidates and persists to DB. Dashboard: Blended column with ★ marker, default sort by blended_score (falls back to match_score). ★ Blend scores button in scoring toolbar.' },
+      { id: 'lc7', name: 'Recruiter view of chat transcripts', status: 'built', note: 'ChatPanel modal in candidate pool: view full transcript bubbles, readiness score, job title. Send new chat invite from any candidate row. 💬 Chat button added to table. Status auto-updates to chatted on send.' },
+      { id: 'lc8', name: 'LLM chat history upload (ChatGPT / Claude exports)', status: 'built', note: 'POST /api/candidates/[id]/upload-llm-export. Auto-detects ChatGPT/Claude JSON format. Runs privacy classifier, extracts skills/domain/YOE via Haiku, merges into fingerprint. 📂 button per candidate in dashboard with results modal showing work vs personal conversation breakdown.' },
+      { id: 'lc9', name: 'Privacy classifier for LLM history parsing', status: 'built', note: 'lib/llm-export/privacy-classifier.ts. Claude Haiku classifies each conversation: work_relevant | personal | neutral | skip. Batches 20 at a time. Personal content never reaches signal extraction — technically enforced.' },
+      { id: 'lc10', name: 'Quorbit as installable MCP tool for candidates', status: 'built', note: 'MCP JSON-RPC 2.0 server at /api/mcp/candidate. Tools: get_profile, propose_update (15min approval token), commit_update. Recruiter generates token via /api/candidates/[id]/mcp-token — returns Claude desktop config snippet. DB: candidate_mcp_tokens + mcp_pending_updates. Every update requires explicit candidate approval before saving.' },
+    ]
+  },
+  {
+    id: 'ats',
+    name: 'Phase 4 — ATS Pipeline Management',
+    subtitle: 'Pipeline stages, tagging, boolean search, bulk actions',
+    colorClass: 4,
+    items: [
+      { id: 'ats1', name: 'Kanban pipeline per job (Sourced → Screened → Interview → Offer → Hired)', status: 'built', note: 'Job selector at /dashboard/pipeline; Kanban at /dashboard/pipeline/[jobId]. Click card to open modal, move stage in one click. Rejected section below board. Pipeline nav link in header.' },
+      { id: 'ats2', name: 'Candidate tagging (custom per company)', status: 'built', note: 'PATCH /api/assignments/[id]/tags. System tags: top-match, needs-followup, on-hold, strong-culture-fit, overqualified. Free-text custom tags. Chips on cards and in modal.' },
+      { id: 'ats3', name: 'Boolean search across candidate pool', status: 'built', note: 'GET /api/candidates/search. tsvector GIN index on full_name, title, company, skills, domain. Trigger auto-updates. AND/OR/NOT query parser -> tsquery. Supports tag/score filters + pagination. Search box in Kanban filters cards live.' },
+      { id: 'ats4', name: 'Bulk actions (move stage, tag, reject, email)', status: 'built', note: 'POST /api/assignments/bulk. Checkbox on every Kanban card + select all. Blue bulk bar appears on selection. Actions: move to stage (with stage picker) or reject all. Max 100 per call, company-scoped.' },
+      { id: 'ats5', name: 'Recruiter notes on candidate profiles', status: 'built', note: 'PATCH /api/assignments/[id]/notes. Free-text notes per assignment. Preview on Kanban card; full edit in modal.' },
+      { id: 'ats6', name: 'Candidate notifications on stage change (email)', status: 'built', note: 'lib/ats/notifications.ts. Resend email to candidate on screened/interview/offer/hired/rejected transitions. Fire-and-forget from stage PATCH endpoint.' },
+      { id: 'ats7', name: 'HRMS webhook integration', status: 'built', note: 'lib/ats/hrms-webhook.ts. Fires on hire/reject to company hrms_webhook_url. HMAC-SHA256 signed. Configurable per company.' },
+    ]
+  },
+  {
+    id: 'candidate',
+    name: 'Phase 5 — Candidate Self-Signup',
+    subtitle: 'Secondary — candidates register directly; builds inbound supply over time',
+    colorClass: 5,
+    items: [
+      { id: 'c1', name: 'Candidate auth (separate from company auth)', status: 'built', note: 'candidate_profiles table referencing auth.users. Signup/login pages at /candidate/signup and /candidate/login. requireCandidate() auth helper. public_slug generated on signup.' },
+      { id: 'c2', name: 'Resume upload + parsing (Claude Haiku)', status: 'built', note: 'POST /api/candidate/resume. PDF → base64 → Haiku document block. Extracts: skills[], domain[], seniority, YOE, education, location, summary. Stored on candidate_profiles.' },
+      { id: 'c3', name: 'Candidate private dashboard', status: 'built', note: '/candidate/dashboard — shows applied jobs with status chips (pending/viewed/shortlisted/rejected), match score per application. Resume upload panel with skill chips. Link to public profile.' },
+      { id: 'c4', name: 'Candidate public profile (shareable link)', status: 'built', note: '/candidate/profile/[slug] — public, no auth. Shows name, title, skills, domain, seniority, YOE, summary. Hides email/phone. Recruiter CTA at bottom.' },
+      { id: 'c5', name: 'Job feed ranked by match score', status: 'built', note: '/candidate/jobs — lists active jobs ranked by fingerprint match (skills 50%, domain 30%, experience 20%). Live search filter. Quick Apply button per card.' },
+      { id: 'c6', name: 'One-click apply with Quorbit profile', status: 'built', note: 'POST /api/candidate/apply. Creates candidate_application record + auto-imports into recruiter pipeline as imported_candidate with pipeline_stage=sourced and tag direct-apply.' },
+    ]
+  },
+  {
+    id: 'monetization',
+    name: 'Phase 6 — Monetization',
+    subtitle: 'Revenue: Starter ₹2,999 · Growth ₹5,999 · Scale ₹12,999/month',
+    colorClass: 6,
+    items: [
+      { id: 'mo1', name: 'Business registration (OPC or Pvt Ltd)', status: 'blocked', note: 'CRITICAL PATH — blocks Razorpay, blocks all live revenue. Engage CA this week. 3–5 week process.' },
+      { id: 'mo2', name: 'Configure Razorpay production keys', status: 'blocked', note: 'Unblocks immediately after business registration completes.' },
+      { id: 'mo3', name: 'Subscription tier gates (Starter / Growth / Scale)', status: 'built', note: 'lib/subscription.ts. PLAN_LIMITS: starter(50 imports, 20 chats), growth(250, 100), scale(unlimited). checkLimit() helper for route enforcement. plan_tier + billing_cycle columns on companies.' },
+      { id: 'mo4', name: 'AI chat session metering', status: 'built', note: 'usage_events table records each chat event. getMonthlyUsage() counts by calendar month. checkLimit() blocks at Starter 20 / Growth 100 / Scale unlimited.' },
+      { id: 'mo5', name: 'Import volume metering', status: 'built', note: 'Same usage_events table with event_type=import. recordUsage() called on each import. Starter 50 / Growth 250 / Scale unlimited per month.' },
+      { id: 'mo6', name: 'Usage analytics dashboard (company-facing)', status: 'built', note: '/dashboard/usage — monthly quota meters (imports, chats), stats grid (total candidates, scored %, chat response rate, pipeline conversion), annual billing promo banner.' },
+      { id: 'mo7', name: 'Annual billing (2 months free)', status: 'built', note: 'PATCH /api/billing/plan supports billing_cycle=annual. Usage dashboard shows promo banner for monthly companies. plan_tier + billing_cycle persisted to DB.' },
+      { id: 'mo8', name: 'Coupon / promo management', status: 'built', note: 'Codes stored in COUPON_CODES env var (comma-separated). Old hardcoded codes (DEVACCESS, QUORBIT100, FREEYEAR) removed as security fix — must set new codes in Vercel. 5 attempts/hr brute-force protection.' },
+      { id: 'mo9', name: 'Internal admin panel (user + revenue view)', status: 'built', note: 'GET /admin — header-only auth via X-Admin-Secret header. URL param removed (was leaking secret to Vercel logs). curl -H "x-admin-secret: <SECRET>" https://pulse.thequorbit.com/admin' },
+    ]
+  },
+  {
+    id: 'security',
+    name: 'Phase 9 — Security Hardening',
+    subtitle: 'Full security audit — 14 vulnerabilities found, 9 patches applied July 2026',
+    colorClass: 4,
+    items: [
+      { id: 'sec1', name: 'Security audit — 14 vulnerabilities identified', status: 'built', note: 'Full audit covering billing, AI credits, auth, webhooks, admin, rate limiting. 3 Critical, 3 High, 5 Medium, 2 Low, 1 Info.' },
+      { id: 'sec2', name: 'CVE-P-001: Billing self-upgrade bypass (CRITICAL)', status: 'built', note: 'PATCH /api/billing/plan permanently disabled — returned 403. Plan changes exclusively via Razorpay payment + webhook verification.' },
+      { id: 'sec3', name: 'CVE-P-002: Dev payment bypass route (CRITICAL)', status: 'built', note: '/api/payments/dev-activate permanently returns 403. DEV_PAYMENT_BYPASS env var must be removed from Vercel.' },
+      { id: 'sec4', name: 'CVE-P-003: Hardcoded coupon codes in public repo (CRITICAL)', status: 'built', note: 'Old codes (DEVACCESS, QUORBIT100, FREEYEAR) removed from source. Now driven by COUPON_CODES env var. Brute-force limit: 5 attempts/hr/user.' },
+      { id: 'sec5', name: 'CVE-P-004: Admin secret leaked via URL param (HIGH)', status: 'built', note: '/admin?secret= removed. Header-only: X-Admin-Secret. Prevents secret appearing in Vercel logs, browser history, referrer headers.' },
+      { id: 'sec6', name: 'CVE-P-005/006: Score-batch unbounded AI + no subscription check (HIGH)', status: 'built', note: 'Hard cap of 50 candidates per batch. checkLimit() + recordUsage() added. Prevents unlimited Haiku spend from single HTTP call.' },
+      { id: 'sec7', name: 'CVE-P-007/008: HRMS webhook — optional sig + timing attack (MEDIUM)', status: 'built', note: 'Signature always required when HRMS is configured. crypto.timingSafeEqual() replaces !== comparison. Unsigned requests → 401.' },
+      { id: 'sec8', name: 'CVE-P-009/010: LLM export — no rate limit + no subscription check (MEDIUM)', status: 'built', note: '3 LLM export uploads/hr/company. checkLimit() + recordUsage() wired in. Prevents runaway Haiku spend from bulk exports.' },
+      { id: 'sec9', name: 'CVE-P-011: Suggest-domain endpoint unauthenticated (MEDIUM)', status: 'built', note: 'IP-based rate limit: 60 req/hr. Protects proprietary skill taxonomy from bulk extraction.' },
+      { id: 'sec10', name: 'Security audit report (.docx)', status: 'built', note: 'Full report: CVE IDs, severity badges, impact analysis, fix descriptions, required actions, env var checklist. Saved to Pulse folder.' },
+      { id: 'sec11', name: 'Distributed rate limiter (Redis/Upstash)', status: 'built', note: 'lib/security/rate-limit.ts rewritten. Async rateLimit() with Upstash sliding-window backend via dynamic import. Falls back to in-memory when UPSTASH_REDIS_REST_URL+TOKEN absent. All 9 callers updated to await. Add packages: npm install @upstash/ratelimit @upstash/redis. Add env vars in Vercel to activate.' },
+      { id: 'sec12', name: 'Resume PDF virus scanning', status: 'built', note: 'lib/security/virus-scan.ts — SHA-256 hash lookup against VirusTotal /files/{hash}. Wired into /api/candidate/resume before parseResume(). Fails open on timeout/missing key. Set VIRUSTOTAL_API_KEY in Vercel to activate.' },
+    ]
+  },
+  {
+    id: 'supply',
+    name: 'Phase 7 — Job Supply (Bootstrap)',
+    subtitle: 'Scraped listings to seed public board — lower priority now companies bring own candidates',
+    colorClass: 6,
+    items: [
+      { id: 's1', name: 'Adzuna India API integration', status: 'built', note: 'lib/job-supply/adzuna.ts. fetchAdzunaJobs() — queries api.adzuna.com/v1/api/jobs/in. Params: what, where, max_days_old, page, results_per_page. Requires ADZUNA_APP_ID + ADZUNA_APP_KEY env vars.' },
+      { id: 's2', name: 'Google Jobs Schema.org parser', status: 'built', note: 'lib/job-supply/schema-parser.ts. Extracts LD+JSON JobPosting blocks from any HTML page. Normalises salary, location, employment type, remote flag. Full attribution — reads only what companies explicitly publish.' },
+      { id: 's3', name: 'Job enrichment pipeline (scraped → fingerprint)', status: 'built', note: 'lib/job-supply/enrichment.ts. enrichJob() sends title+description to Claude Haiku → returns skills[], domain[], seniority, min_experience, remote. enrichJobsBatch() with 200ms inter-call delay.' },
+      { id: 's4', name: 'Source attribution + deduplication', status: 'built', note: 'lib/job-supply/dedup.ts. SHA-256 hash of (title+company+location) → dedup_hash UNIQUE constraint on job_listings. Upsert on conflict. prepareForUpsert() attaches source attribution.' },
+      { id: 's5', name: 'Web scraping infrastructure (Apify)', status: 'planned', note: 'Lower priority — only needed if public board requires volume before organic company signups. Apify actors would feed /api/jobs/ingest with source=apify.' },
+      { id: 's6', name: 'SerpAPI — Google Jobs integration', status: 'built', note: 'lib/job-supply/serpapi.ts. fetchSerpApiJobs() queries Google Jobs via SerpAPI. SERPAPI_KEY env var required. Richest source — returns jobs posted directly on Google Jobs.' },
+      { id: 's7', name: 'Free job APIs — Remotive, Arbeitnow, Jobicy', status: 'built', note: 'lib/job-supply/remotive.ts, arbeitnow.ts, jobicy.ts. No API key required. Remotive covers remote tech, Arbeitnow covers Europe, Jobicy covers global remote roles.' },
+      { id: 's8', name: 'Multi-source orchestrator', status: 'built', note: 'lib/job-supply/orchestrator.ts. Runs all sources in parallel, merges results, deduplicates across sources, enriches via Haiku, upserts to DB in one pass.' },
+      { id: 's9', name: 'Automated ingest cron (Vercel cron, every 6h)', status: 'built', note: '/api/cron/ingest-jobs. Runs every 6 hours via vercel.json cron. Bearer auth: Authorization: Bearer CRON_SECRET. ?enrich=N param to batch-enrich up to N jobs per run. Manual trigger: curl -H "Authorization: Bearer jobpulse-cron-secret-dev" https://pulse.thequorbit.com/api/cron/ingest-jobs?enrich=10' },
+      { id: 's10', name: 'Career page scraper (Greenhouse / Lever / Ashby / Workable / SmartRecruiters + HTML fallback)', status: 'built', note: 'lib/scraper/. detectAts() fingerprints ATS from URL. Native API fetchers for each platform. Cheerio HTML fallback for any other career page. Pre-seeded with 20 India companies.' },
+      { id: 's11', name: 'Career page source management UI', status: 'built', note: '/api/job-sources routes + /dashboard/job-sources admin UI. Add/delete career page sources by URL, trigger manual scrape per source, view last scraped timestamp.' },
+    ]
+  },
+  {
+    id: 'infrastructure',
+    name: 'Phase 8 — Infrastructure API',
+    subtitle: 'Matching-as-a-service for HRMS platforms and AI assistants',
+    colorClass: 6,
+    items: [
+      { id: 'inf1', name: 'Quorbit Matching API (public, versioned)', status: 'built', note: 'POST /api/v1/match — Bearer API key auth. Accepts candidate{skills,domain,seniority,YOE} + job{title,skills,domain,min_experience,description}. Returns match_score + breakdown. Auto-enriches job from description via Haiku if skills not provided. Records usage event per call.' },
+      { id: 'inf2', name: 'HRMS partner integrations (Zoho Recruit, Keka, greytHR)', status: 'built', note: 'lib/hrms/adapters.ts — normalises each partner webhook format into Quorbit pipeline events. POST /api/hrms/[partner]/webhook — HMAC-SHA256 validated, updates candidate pipeline stage on hire/reject/stage-change.' },
+      { id: 'inf3', name: 'University placement office API', status: 'built', note: 'GET /api/v1/university — lists active entry-level jobs (min_experience ≤ 2). POST /api/v1/university — bulk submit student profiles (max 200) with university_name + batch_year, auto-tagged for campus placement.' },
+      { id: 'inf4', name: 'ChatGPT Plugin / GPT Action', status: 'built', note: '/.well-known/ai-plugin.json — plugin manifest for ChatGPT discovery. /api/v1/openapi-gpt.json — GPT Action OpenAPI spec exposing scoreCandidate + searchCandidates. Bearer auth. Access-Control-Allow-Origin: chat.openai.com.' },
+      { id: 'inf5', name: 'Match-to-find ratio benchmark report (annual)', status: 'built', note: 'GET /api/reports/match-to-find — public, no auth, cached 24h. Returns avg match score, score distribution (elite/strong/moderate/weak %), top 20 skills in demand, top 10 domains, hire rate. Anonymised across all companies.' },
+    ]
+  }
+,
+  {
+    id: 'distribution',
+    name: 'Phase 10 — Job Distribution',
+    subtitle: 'Auto-distribute every posted job to 14 external job platforms',
+    colorClass: 1,
+    items: [
+      { id: 'dist1', name: 'Distribution to Indeed, LinkedIn, Naukri', status: 'built', note: 'lib/distribution/. Indeed via RSS feed ingestion, LinkedIn via Job Postings API, Naukri via submission API. distributeJob() wired into job create — fires on every new posting.' },
+      { id: 'dist2', name: 'Extended platform handlers (Shine, Glassdoor, Wellfound, TimesJobs + 9 more)', status: 'built', note: 'Integration registry pattern — modular handler per platform, all implementing the same interface. 14 platforms total.' },
+      { id: 'dist3', name: 'Integration configs DB + hub UI', status: 'built', note: 'integration_configs table. /dashboard/integrations — shows all 14 platforms with connection status, last sync time, enable/disable toggle.' },
+      { id: 'dist4', name: 'Distribution badges on job listings', status: 'built', note: 'Job list shows distribution_status per platform per job. Status badges: sent, pending, failed. Recruiter sees at a glance where each job is live.' },
+      { id: 'dist5', name: 'Dual-mode integrations (managed vs. bring-your-own)', status: 'built', note: 'Fully implemented. mode column in integration_configs. Managed = Quorbit env creds injected via resolveManagedConfig() in distributor. Owned = company pastes API key (mode=\'owned\' set on connect). Hub UI: dual-mode card with enable/disable toggle + own account section. Shine, TimesJobs, ZipRecruiter supported. Commit: 69eccdec.' },
+    ]
+  },
+  {
+    id: 'team',
+    name: 'Phase 11 — Multi-User Teams',
+    subtitle: 'Multiple recruiters per company account with role-based access control',
+    colorClass: 5,
+    items: [
+      { id: 'team1', name: 'Company slugs + public company pages', status: 'built', note: 'companies.slug column + unique index. Public /company/[slug] page — shows active job listings, company description, recruiter CTA. SEO-indexable.' },
+      { id: 'team2', name: 'Multi-user team management (invite, roles)', status: 'built', note: 'company_members table. Admin can invite by email, remove members, and change roles. Roles: admin, recruiter, viewer.' },
+      { id: 'team3', name: 'requireCompany() updated for multi-user', status: 'built', note: 'Auth helper now checks company_members. Any team member can access the dashboard; admin-only actions gate on role check inside each route.' },
+      { id: 'team4', name: 'Candidate profile URL restructure', status: 'built', note: '/candidate/profile/[slug] migrated to /candidate/[slug] — cleaner public URL for sharing.' },
+    ]
+  },
+  {
+    id: 'gtm',
+    name: 'Phase 12 — Go-To-Market Checklist',
+    subtitle: 'What must be resolved before public launch',
+    colorClass: 3,
+    items: [
+      { id: 'gtm1', name: 'Add SUPABASE_SERVICE_ROLE_KEY to Vercel', status: 'built', note: 'Already present in Vercel since Jun 29. Confirmed via Vercel dashboard.' },
+      { id: 'gtm2', name: 'Fix login for rishi@thequorbit.com', status: 'built', note: 'Root cause: auth.users row had NULL values for confirmation_token, recovery_token, email_change_token_new, email_change columns. gotrue Go scanner fails on NULL → converted all to empty string via SQL. Login confirmed working Jul 7 (HTTP 200, access_token issued).' },
+      { id: 'gtm3', name: 'Delete temp /api/admin/fix-auth route', status: 'built', note: 'Deleted via GitHub API commit 1c9c4a3 on Jul 7. Vercel auto-deployed.' },
+      { id: 'gtm4', name: 'Fix middleware redirect /signup → /login', status: 'built', note: 'Fixed in middleware.ts — unauthenticated /dashboard now redirects to /onboarding/login. Pushed to GitHub (commit 408df54) on Jul 7.' },
+      { id: 'gtm5', name: 'Trigger initial job ingest (populate listings)', status: 'built', note: 'Cron triggered manually Jul 7 with ?enrich=10. Cron runs automatically every 6h going forward.' },
+      { id: 'gtm6', name: 'Remove DEV_PAYMENT_BYPASS env var from Vercel', status: 'built', note: 'Confirmed not present in Vercel environment variables — already removed.' },
+      { id: 'gtm7', name: 'Set COUPON_CODES env var in Vercel', status: 'planned', note: 'Old hardcoded codes (DEVACCESS, QUORBIT100, FREEYEAR) removed from source. Add new launch codes: COUPON_CODES=CODE1,CODE2 in Vercel env vars.' },
+      { id: 'gtm8', name: 'Business registration (OPC or Pvt Ltd)', status: 'in-progress', note: 'Registration filed. Awaiting official documents. Once received, proceed directly to gtm9 (Razorpay production keys).' },
+      { id: 'gtm9', name: 'Configure Razorpay production keys', status: 'planned', note: 'Add RAZORPAY_KEY_ID + RAZORPAY_KEY_SECRET + RAZORPAY_WEBHOOK_SECRET to Vercel. Blocked on gtm8 documents arriving.' },
+      { id: 'gtm10', name: 'Publish Chrome extension to Chrome Web Store', status: 'planned', note: 'Extension source is built (Manifest v3). Requires: Google developer account ($5), privacy policy URL, screenshots. Review takes 2–7 days.' },
+      { id: 'gtm11', name: 'Landing page — proper marketing copy + pricing', status: 'planned', note: 'Current / is a bare holding page. Needs value prop, feature highlights, pricing table (Starter ₹2,999 / Growth ₹5,999 / Scale ₹12,999), and a strong CTA for first 10 customers.' },
+      { id: 'gtm12', name: 'Distributed rate limiting (Redis / Upstash)', status: 'built', note: 'lib/security/rate-limit.ts rewritten. Async rateLimit() with Upstash sliding-window backend via dynamic import. Falls back to in-memory when UPSTASH_REDIS_REST_URL+TOKEN absent. All 9 callers updated to await. Add packages: npm install @upstash/ratelimit @upstash/redis. Add env vars in Vercel to activate.' },
+      { id: 'gtm13', name: 'Resume PDF virus scanning', status: 'built', note: 'lib/security/virus-scan.ts — SHA-256 hash lookup against VirusTotal /files/{hash}. Wired into /api/candidate/resume before parseResume(). Fails open on timeout/missing key. Set VIRUSTOTAL_API_KEY in Vercel to activate.' },
+    ]
+  }
+];
+
+const STATUS_CYCLE = ['built', 'in-progress', 'planned', 'blocked'];
+const STATUS_LABELS = { 'built': 'Built', 'in-progress': 'In progress', 'planned': 'Planned', 'blocked': 'Blocked' };
+const STORAGE_KEY = 'quorbit-tracker-v6';
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function saveState(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent =
+    'Updated ' + now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+function getItemStatus(state, phaseId, itemId, defaultStatus) {
+  return (state && state[phaseId] && state[phaseId][itemId]) || defaultStatus;
+}
+
+let state = loadState() || {};
+let openPhases = {};
+
+function cycleStatus(phaseId, itemId, defaultStatus) {
+  const current = getItemStatus(state, phaseId, itemId, defaultStatus);
+  const idx = STATUS_CYCLE.indexOf(current);
+  const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+  if (!state[phaseId]) state[phaseId] = {};
+  state[phaseId][itemId] = next;
+  saveState(state);
+  renderAll();
+}
+
+function resetAll() {
+  if (!confirm('Reset all statuses to defaults?')) return;
+  state = {};
+  saveState(state);
+  renderAll();
+}
+
+function togglePhase(phaseId) {
+  openPhases[phaseId] = !openPhases[phaseId];
+  renderAll();
+}
+
+function renderAll() {
+  const container = document.getElementById('phaseContainer');
+  container.innerHTML = '';
+
+  let totalItems = 0, builtCount = 0, progressCount = 0, plannedCount = 0, blockedCount = 0;
+
+  PHASES.forEach(phase => {
+    const phaseState = state[phase.id] || {};
+    let phaseBuilt = 0;
+
+    phase.items.forEach(item => {
+      const st = getItemStatus(state, phase.id, item.id, item.status);
+      totalItems++;
+      if (st === 'built') { builtCount++; phaseBuilt++; }
+      else if (st === 'in-progress') progressCount++;
+      else if (st === 'planned') plannedCount++;
+      else if (st === 'blocked') blockedCount++;
+    });
+
+    const pct = Math.round((phaseBuilt / phase.items.length) * 100);
+    const isOpen = openPhases[phase.id] !== undefined ? openPhases[phase.id] : (phase.colorClass === 0);
+
+    const card = document.createElement('div');
+    card.className = 'phase-card';
+
+    card.innerHTML = `
+      <div class="phase-header" onclick="togglePhase('${phase.id}')">
+        <div class="phase-num phase-color-${phase.colorClass}">${phase.colorClass}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="phase-title">${phase.name}</div>
+          <div class="phase-subtitle">${phase.subtitle}</div>
+        </div>
+        <span class="phase-progress-text">${phaseBuilt}/${phase.items.length}</span>
+        <div class="phase-bar-wrap">
+          <div class="phase-bar phase-bar-${phase.colorClass}" style="width:${pct}%"></div>
+        </div>
+        <span class="phase-chevron ${isOpen ? 'open' : ''}">▶</span>
+      </div>
+      <div class="phase-body ${isOpen ? '' : 'hidden'}">
+        ${phase.items.map(item => {
+          const st = getItemStatus(state, phase.id, item.id, item.status);
+          return `
+          <div class="item-row">
+            <span class="status-badge ${st}" onclick="cycleStatus('${phase.id}','${item.id}','${item.status}')" title="Click to change status">${STATUS_LABELS[st]}</span>
+            <div style="flex:1; min-width:0;">
+              <div class="item-name">${item.name}</div>
+              ${item.note ? `<div class="item-note">${item.note}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+
+  document.getElementById('s-total').textContent = totalItems;
+  document.getElementById('s-built').textContent = builtCount;
+  document.getElementById('s-progress').textContent = progressCount;
+  document.getElementById('s-planned').textContent = plannedCount;
+  const pctComplete = Math.round((builtCount / totalItems) * 100);
+  document.getElementById('s-pct').textContent = pctComplete + '%';
+  document.getElementById('overallBar').style.width = pctComplete + '%';
+
+  if (!localStorage.getItem(STORAGE_KEY)) {
+    document.getElementById('lastUpdated').textContent = 'Auto-saved on change';
+  }
+}
+
+PHASES.forEach(p => {
+  if (p.colorClass === 0) openPhases[p.id] = true;
+});
+
+renderAll();
+</script>
+</body>
+</html>
