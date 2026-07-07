@@ -1,6 +1,6 @@
 /**
  * c5 — Job feed ranked by match score.
- * Candidate sees open roles sorted by their fingerprint match — not keyword search.
+ * Shows both company-posted jobs (jobs table) and scraped external listings (job_listings table).
  */
 
 import { requireCandidate } from '@/lib/candidate-auth'
@@ -13,19 +13,53 @@ export default async function CandidateJobFeedPage() {
   const { candidate } = await requireCandidate()
   const supabase = createServiceClient()
 
-  // Fetch active jobs (from external job_listings + company-posted jobs)
-  const { data: jobs } = await supabase
+  // 1. Company-posted jobs (active, with company info for in-app apply)
+  const { data: companyJobs } = await supabase
     .from('jobs')
     .select('id, title, location, job_type, remote, salary_min, salary_max, salary_currency, skills, domain, min_experience, posted_at, company:companies(id, name, logo_url)')
     .eq('status', 'active')
     .order('posted_at', { ascending: false })
     .limit(100)
 
+  // 2. Scraped external jobs from all sources (Adzuna, Remotive, Arbeitnow, Jobicy, SerpAPI, etc.)
+  const { data: externalJobs } = await supabase
+    .from('job_listings')
+    .select('id, title, location, remote, salary_min, salary_max, salary_currency, skills, domain, min_experience, posted_at, company_name, url, source')
+    .order('posted_at', { ascending: false, nullsFirst: false })
+    .limit(300)
+
+  // Normalize external jobs to unified shape
+  const normalizedExternal = (externalJobs ?? []).map((j: any) => ({
+    id:              `ext_${j.id}`,
+    title:           j.title,
+    location:        j.location ?? 'Remote',
+    job_type:        'full_time',
+    remote:          j.remote ?? false,
+    salary_min:      j.salary_min,
+    salary_max:      j.salary_max,
+    salary_currency: j.salary_currency ?? 'INR',
+    skills:          (j.skills as string[]) ?? [],
+    domain:          (j.domain as string[]) ?? [],
+    min_experience:  j.min_experience,
+    posted_at:       j.posted_at,
+    company:         { id: null as string | null, name: j.company_name, logo_url: null as string | null },
+    external_url:    j.url as string,
+    source:          j.source as string,
+  }))
+
+  const normalizedCompany = (companyJobs ?? []).map((j: any) => ({
+    ...j,
+    external_url: null as string | null,
+    source:       'direct',
+  }))
+
+  const allJobs = [...normalizedCompany, ...normalizedExternal]
+
   // Score each job against candidate's fingerprint
   const candidateSkillsSet = new Set((candidate.skills ?? []).map((s: string) => s.toLowerCase()))
   const candidateDomainSet = new Set((candidate.domain ?? []).map((d: string) => d.toLowerCase()))
 
-  const scored = (jobs ?? []).map((job: any) => {
+  const scored = allJobs.map((job: any) => {
     const jobSkills: string[] = (job.skills ?? []).map((s: string) => s.toLowerCase())
     const jobDomain: string[] = (job.domain ?? []).map((d: string) => d.toLowerCase())
 

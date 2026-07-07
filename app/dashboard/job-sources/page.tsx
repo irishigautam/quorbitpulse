@@ -35,6 +35,10 @@ export default function JobSourcesPage() {
   const [scrapingId, setScrapingId] = useState<string | null>(null)
   const [scrapeResults, setScrapeResults] = useState<Record<string, { jobs: number; error?: string }>>({})
 
+  // Global ingest state
+  const [ingestLoading, setIngestLoading] = useState(false)
+  const [ingestResult, setIngestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     const res = await fetch('/api/job-sources')
@@ -90,16 +94,69 @@ export default function JobSourcesPage() {
     await load()
   }
 
+  async function handleRunIngest() {
+    setIngestLoading(true)
+    setIngestResult(null)
+    try {
+      const res = await fetch('/api/admin/run-ingest', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        const s = data.stats
+        const sourceList = Object.entries(s.sources as Record<string, number>)
+          .filter(([, count]) => count > 0)
+          .map(([src, count]) => `${src}: ${count}`)
+          .join(', ')
+        setIngestResult({
+          ok: true,
+          message: `Done! ${s.new} new jobs, ${s.updated} updated, ${s.enriched} enriched. Sources: ${sourceList || 'none'}`,
+        })
+      } else {
+        setIngestResult({ ok: false, message: data.error ?? 'Ingest failed' })
+      }
+    } catch (err) {
+      setIngestResult({ ok: false, message: 'Network error' })
+    }
+    setIngestLoading(false)
+  }
+
   const activeSources = sources.filter(s => s.active)
   const inactiveSources = sources.filter(s => !s.active)
 
   return (
     <div style={{ padding: '32px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Job Sources</h1>
-        <p style={{ color: '#888', marginTop: 4 }}>
-          Company career pages scraped daily. Supports Greenhouse, Lever, Ashby, Workable, SmartRecruiters, and custom HTML.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Job Sources</h1>
+          <p style={{ color: '#888', marginTop: 4 }}>
+            Company career pages scraped daily. Supports Greenhouse, Lever, Ashby, Workable, SmartRecruiters, and custom HTML.
+          </p>
+        </div>
+
+        {/* Manual ingest trigger */}
+        <div style={{ textAlign: 'right' }}>
+          <button
+            onClick={handleRunIngest}
+            disabled={ingestLoading}
+            style={{
+              background: ingestLoading ? '#333' : '#fff',
+              color: ingestLoading ? '#888' : '#000',
+              border: '1px solid #444',
+              borderRadius: 6,
+              padding: '9px 18px',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: ingestLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {ingestLoading ? '⏳ Ingesting…' : '↻ Run job ingest now'}
+          </button>
+          {ingestResult && (
+            <p style={{ marginTop: 8, fontSize: 12, color: ingestResult.ok ? '#22c55e' : '#ef4444', maxWidth: 320 }}>
+              {ingestResult.message}
+            </p>
+          )}
+          <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>Auto-runs daily at 2 AM UTC</p>
+        </div>
       </div>
 
       {/* Stats bar */}

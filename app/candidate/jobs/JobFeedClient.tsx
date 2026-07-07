@@ -2,6 +2,16 @@
 
 import { useState } from 'react'
 
+const SOURCE_LABEL: Record<string, string> = {
+  adzuna:      'Adzuna',
+  serpapi:     'Google Jobs',
+  remotive:    'Remotive',
+  arbeitnow:   'Arbeitnow',
+  jobicy:      'Jobicy',
+  career_page: 'Company site',
+  direct:      '',
+}
+
 interface JobCard {
   id: string
   title: string
@@ -15,8 +25,10 @@ interface JobCard {
   domain: string[]
   min_experience: number | null
   posted_at: string | null
-  company: { id: string; name: string; logo_url: string | null } | null
+  company: { id: string | null; name: string; logo_url: string | null } | null
   match_score: number
+  external_url: string | null   // set for scraped jobs; null for company-posted
+  source: string
 }
 
 const scoreColor = (s: number) =>
@@ -78,24 +90,50 @@ export default function JobFeedClient({ jobs, candidateId }: { jobs: JobCard[]; 
                     {job.min_experience !== null ? ` · ${job.min_experience}+ yrs` : ''}
                   </div>
                 </div>
-                <button
-                  onClick={() => apply(job.id, (job as any).company_id ?? '')}
-                  disabled={applied.has(job.id) || applying === job.id}
-                  style={{
-                    flexShrink: 0,
-                    marginLeft: '0.75rem',
-                    padding: '0.45rem 1rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontWeight: 600,
-                    fontSize: '0.82rem',
-                    cursor: applied.has(job.id) ? 'default' : 'pointer',
-                    background: applied.has(job.id) ? '#D1FAE5' : 'var(--primary)',
-                    color: applied.has(job.id) ? '#065F46' : '#fff',
-                  }}
-                >
-                  {applied.has(job.id) ? '✓ Applied' : applying === job.id ? '…' : 'Quick Apply'}
-                </button>
+
+                {/* External scraped job: open URL in new tab */}
+                {job.external_url ? (
+                  <a
+                    href={job.external_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      flexShrink: 0,
+                      marginLeft: '0.75rem',
+                      padding: '0.45rem 1rem',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                      background: '#F3F4F6',
+                      color: '#374151',
+                      textDecoration: 'none',
+                      whiteSpace: 'nowrap',
+                      border: '1px solid #E5E7EB',
+                    }}
+                  >
+                    View Job →
+                  </a>
+                ) : (
+                  /* Company-posted job: in-app quick apply */
+                  <button
+                    onClick={() => apply(job.id, job.company?.id ?? '')}
+                    disabled={applied.has(job.id) || applying === job.id}
+                    style={{
+                      flexShrink: 0,
+                      marginLeft: '0.75rem',
+                      padding: '0.45rem 1rem',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                      cursor: applied.has(job.id) ? 'default' : 'pointer',
+                      background: applied.has(job.id) ? '#D1FAE5' : 'var(--primary)',
+                      color: applied.has(job.id) ? '#065F46' : '#fff',
+                    }}
+                  >
+                    {applied.has(job.id) ? '✓ Applied' : applying === job.id ? '…' : 'Quick Apply'}
+                  </button>
+                )}
               </div>
 
               {/* Salary */}
@@ -113,6 +151,15 @@ export default function JobFeedClient({ jobs, candidateId }: { jobs: JobCard[]; 
                       {s}
                     </span>
                   ))}
+                </div>
+              )}
+
+              {/* Source badge for external jobs */}
+              {job.source && job.source !== 'direct' && SOURCE_LABEL[job.source] && (
+                <div style={{ marginTop: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', background: '#F9FAFB', color: '#6B7280', padding: '1px 6px', borderRadius: '4px', border: '1px solid #E5E7EB' }}>
+                    via {SOURCE_LABEL[job.source]}
+                  </span>
                 </div>
               )}
             </div>
