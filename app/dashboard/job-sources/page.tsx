@@ -17,13 +17,13 @@ interface CareerSource {
   created_at: string
 }
 
-const ATS_BADGE: Record<string, { label: string; color: string }> = {
-  greenhouse:      { label: 'Greenhouse',      color: '#24a148' },
-  lever:           { label: 'Lever',            color: '#0052cc' },
-  ashby:           { label: 'Ashby',            color: '#7c3aed' },
-  workable:        { label: 'Workable',         color: '#0097a7' },
-  smartrecruiters: { label: 'SmartRecruiters',  color: '#e65100' },
-  html:            { label: 'HTML scrape',      color: '#78909c' },
+const ATS_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  greenhouse:      { label: 'Greenhouse',     bg: '#DCFCE7', color: '#15803D' },
+  lever:           { label: 'Lever',           bg: '#DBEAFE', color: '#1D4ED8' },
+  ashby:           { label: 'Ashby',           bg: '#EDE9FE', color: '#6D28D9' },
+  workable:        { label: 'Workable',        bg: '#CFFAFE', color: '#0E7490' },
+  smartrecruiters: { label: 'SmartRecruiters', bg: '#FEF3C7', color: '#92400E' },
+  html:            { label: 'HTML',            bg: '#F3F4F6', color: '#374151' },
 }
 
 export default function JobSourcesPage() {
@@ -34,8 +34,6 @@ export default function JobSourcesPage() {
   const [formError, setFormError] = useState('')
   const [scrapingId, setScrapingId] = useState<string | null>(null)
   const [scrapeResults, setScrapeResults] = useState<Record<string, { jobs: number; error?: string }>>({})
-
-  // Global ingest state
   const [ingestLoading, setIngestLoading] = useState(false)
   const [ingestResult, setIngestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -106,14 +104,11 @@ export default function JobSourcesPage() {
           .filter(([, count]) => count > 0)
           .map(([src, count]) => `${src}: ${count}`)
           .join(', ')
-        setIngestResult({
-          ok: true,
-          message: `Done! ${s.new} new jobs, ${s.updated} updated, ${s.enriched} enriched. Sources: ${sourceList || 'none'}`,
-        })
+        setIngestResult({ ok: true, message: `Done! ${s.new} new jobs, ${s.updated} updated, ${s.enriched} enriched. Sources: ${sourceList || 'none'}` })
       } else {
         setIngestResult({ ok: false, message: data.error ?? 'Ingest failed' })
       }
-    } catch (err) {
+    } catch {
       setIngestResult({ ok: false, message: 'Network error' })
     }
     setIngestLoading(false)
@@ -121,109 +116,93 @@ export default function JobSourcesPage() {
 
   const activeSources = sources.filter(s => s.active)
   const inactiveSources = sources.filter(s => !s.active)
+  const totalJobsToday = sources.reduce((a, s) => a + (s.last_jobs_found || 0), 0)
 
   return (
-    <div style={{ padding: '32px', maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
+    <div>
+      {/* Page header */}
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Job Sources</h1>
-          <p style={{ color: '#888', marginTop: 4 }}>
-            Company career pages scraped daily. Supports Greenhouse, Lever, Ashby, Workable, SmartRecruiters, and custom HTML.
+          <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Job Sources</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+            Career pages scraped daily · Greenhouse, Lever, Ashby, Workable, and HTML fallback
           </p>
         </div>
-
-        {/* Manual ingest trigger */}
-        <div style={{ textAlign: 'right' }}>
+        <div className="text-right">
           <button
             onClick={handleRunIngest}
             disabled={ingestLoading}
-            style={{
-              background: ingestLoading ? '#333' : '#fff',
-              color: ingestLoading ? '#888' : '#000',
-              border: '1px solid #444',
-              borderRadius: 6,
-              padding: '9px 18px',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: ingestLoading ? 'not-allowed' : 'pointer',
-            }}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+            style={{ background: ingestLoading ? 'var(--muted)' : 'var(--accent)', cursor: ingestLoading ? 'not-allowed' : 'pointer' }}
           >
-            {ingestLoading ? '⏳ Ingesting…' : '↻ Run job ingest now'}
+            {ingestLoading ? '⏳ Ingesting…' : '↻ Run ingest now'}
           </button>
+          <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Auto-runs daily at 9:30 PM IST</p>
           {ingestResult && (
-            <p style={{ marginTop: 8, fontSize: 12, color: ingestResult.ok ? '#22c55e' : '#ef4444', maxWidth: 320 }}>
+            <p className="text-xs mt-1 max-w-xs" style={{ color: ingestResult.ok ? '#059669' : '#DC2626' }}>
               {ingestResult.message}
             </p>
           )}
-          <p style={{ fontSize: 11, color: '#555', marginTop: 4 }}>Auto-runs daily at 2 AM UTC</p>
         </div>
       </div>
 
-      {/* Stats bar */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
         {[
           { label: 'Total sources', value: sources.length },
-          { label: 'Active', value: activeSources.length },
-          { label: 'Jobs found today', value: sources.reduce((a, s) => a + (s.last_jobs_found || 0), 0) },
+          { label: 'Active',        value: activeSources.length },
+          { label: 'Jobs scraped today', value: totalJobsToday },
         ].map(stat => (
-          <div key={stat.label} style={{
-            background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
-            padding: '16px 24px', flex: 1,
-          }}>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{stat.value}</div>
-            <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>{stat.label}</div>
+          <div key={stat.label} className="bg-white rounded-xl border p-5">
+            <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--muted)' }}>{stat.label}</p>
+            <p className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>{stat.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Add form */}
-      <div style={{
-        background: '#111', border: '1px solid #333', borderRadius: 10, padding: 24, marginBottom: 32,
-      }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 16px' }}>Add Career Page</h2>
-        <form onSubmit={handleAdd} style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: '0 0 200px' }}>
-            <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 6 }}>Company Name</label>
+      {/* Add source form */}
+      <div className="bg-white rounded-2xl border p-6 mb-6">
+        <h2 className="font-semibold mb-4" style={{ fontFamily: 'var(--font-display)' }}>Add Career Page</h2>
+        <form onSubmit={handleAdd} className="flex gap-3 items-end flex-wrap">
+          <div className="w-48">
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted)' }}>Company Name</label>
             <input
               value={form.company_name}
               onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))}
               placeholder="Razorpay"
               required
-              style={inputStyle}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <label style={{ fontSize: 12, color: '#888', display: 'block', marginBottom: 6 }}>Career Page URL</label>
+          <div className="flex-1 min-w-72">
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted)' }}>Career Page URL</label>
             <input
               value={form.career_url}
               onChange={e => setForm(f => ({ ...f, career_url: e.target.value }))}
               placeholder="https://jobs.lever.co/razorpay"
               required
               type="url"
-              style={inputStyle}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <button
             type="submit"
             disabled={adding}
-            style={{
-              background: '#fff', color: '#000', border: 'none', borderRadius: 6,
-              padding: '10px 20px', fontWeight: 600, cursor: adding ? 'not-allowed' : 'pointer',
-              opacity: adding ? 0.6 : 1,
-            }}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: adding ? 'var(--muted)' : 'var(--accent)', cursor: adding ? 'not-allowed' : 'pointer' }}
           >
-            {adding ? 'Detecting ATS…' : '+ Add Source'}
+            {adding ? 'Detecting…' : '+ Add Source'}
           </button>
         </form>
-        {formError && <p style={{ color: '#ef4444', marginTop: 8, fontSize: 13 }}>{formError}</p>}
-        <p style={{ color: '#555', fontSize: 12, marginTop: 12, margin: '12px 0 0' }}>
-          ATS is auto-detected from the URL. Paste a Greenhouse, Lever, Ashby, Workable or SmartRecruiters URL for best results.
+        {formError && <p className="text-xs mt-2 text-red-600">{formError}</p>}
+        <p className="text-xs mt-3" style={{ color: 'var(--muted)' }}>
+          ATS type is auto-detected. Paste a Greenhouse, Lever, Ashby, Workable, or SmartRecruiters URL for best results.
         </p>
       </div>
 
       {/* Sources table */}
       {loading ? (
-        <p style={{ color: '#888' }}>Loading…</p>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>Loading…</p>
       ) : (
         <>
           <SourceTable
@@ -246,6 +225,12 @@ export default function JobSourcesPage() {
               onScrape={handleScrape}
             />
           )}
+          {sources.length === 0 && (
+            <div className="bg-white rounded-2xl border p-12 text-center">
+              <p className="font-medium mb-1" style={{ fontFamily: 'var(--font-display)' }}>No sources yet</p>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>Add a company career page above to start scraping jobs.</p>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -266,98 +251,117 @@ function SourceTable({
   if (sources.length === 0) return null
 
   return (
-    <div style={{ marginBottom: 32 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <div className="mb-6">
+      <h3 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--muted)' }}>
         {title}
       </h3>
-      <div style={{ border: '1px solid #333', borderRadius: 10, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <div className="bg-white rounded-2xl border overflow-hidden">
+        <table className="w-full text-sm border-collapse">
           <thead>
-            <tr style={{ background: '#111', borderBottom: '1px solid #333' }}>
+            <tr className="border-b bg-gray-50">
               {['Company', 'URL', 'ATS', 'Last Scraped', 'Jobs Found', 'Actions'].map(h => (
-                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: '#666', fontWeight: 500 }}>{h}</th>
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
-          <tbody>
-            {sources.map((source, i) => {
-              const atsBadge = ATS_BADGE[source.ats_type ?? '']
+          <tbody className="divide-y">
+            {sources.map(source => {
+              const badge = ATS_BADGE[source.ats_type ?? '']
               const isScraping = scrapingId === source.id
               const result = scrapeResults[source.id]
 
               return (
-                <tr
-                  key={source.id}
-                  style={{ borderBottom: i < sources.length - 1 ? '1px solid #222' : 'none', background: '#0a0a0a' }}
-                >
-                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{source.company_name}</td>
-                  <td style={{ padding: '12px 16px' }}>
+                <tr key={source.id} className="hover:bg-gray-50">
+                  {/* Company */}
+                  <td className="px-4 py-3 font-medium">{source.company_name}</td>
+
+                  {/* URL */}
+                  <td className="px-4 py-3">
                     <a
                       href={source.career_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ color: '#60a5fa', textDecoration: 'none', fontSize: 12 }}
+                      className="text-xs hover:underline"
+                      style={{ color: 'var(--accent)' }}
                     >
-                      {new URL(source.career_url).hostname.replace('www.', '')}
+                      {(() => { try { return new URL(source.career_url).hostname.replace('www.', '') } catch { return source.career_url } })()} ↗
                     </a>
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    {atsBadge ? (
-                      <span style={{
-                        background: atsBadge.color + '22', color: atsBadge.color,
-                        border: `1px solid ${atsBadge.color}44`,
-                        borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600,
-                      }}>
-                        {atsBadge.label}
+
+                  {/* ATS badge */}
+                  <td className="px-4 py-3">
+                    {badge ? (
+                      <span
+                        className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: badge.bg, color: badge.color }}
+                      >
+                        {badge.label}
                       </span>
                     ) : (
-                      <span style={{ color: '#555', fontSize: 11 }}>Undetected</span>
+                      <span className="text-xs" style={{ color: 'var(--muted)' }}>—</span>
                     )}
                     {source.ats_slug && (
-                      <span style={{ color: '#555', fontSize: 11, marginLeft: 6 }}>({source.ats_slug})</span>
+                      <span className="ml-1.5 text-xs" style={{ color: 'var(--muted)' }}>({source.ats_slug})</span>
                     )}
                   </td>
-                  <td style={{ padding: '12px 16px', color: '#888', fontSize: 12 }}>
-                    {source.last_scraped_at
-                      ? new Date(source.last_scraped_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
-                      : 'Never'}
+
+                  {/* Last scraped + error */}
+                  <td className="px-4 py-3">
+                    <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                      {source.last_scraped_at
+                        ? new Date(source.last_scraped_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+                        : 'Never'}
+                    </span>
                     {source.last_error && (
-                      <div style={{ color: '#ef4444', fontSize: 11, marginTop: 2 }} title={source.last_error}>
-                        ⚠ {source.last_error.slice(0, 40)}…
+                      <div
+                        className="mt-1 text-xs text-red-600 flex items-start gap-1"
+                        title={source.last_error}
+                      >
+                        <span className="shrink-0">⚠️</span>
+                        <span className="truncate max-w-44">{source.last_error}</span>
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{ fontWeight: 600 }}>{source.last_jobs_found || 0}</span>
+
+                  {/* Jobs found */}
+                  <td className="px-4 py-3">
+                    <span className="font-semibold">{source.last_jobs_found || 0}</span>
                     {result && (
-                      <span style={{ marginLeft: 8, color: result.error ? '#ef4444' : '#22c55e', fontSize: 11 }}>
-                        {result.error ? `✗ ${result.error.slice(0, 30)}` : `→ ${result.jobs} found`}
+                      <span className={`ml-2 text-xs ${result.error ? 'text-red-600' : 'text-green-600'}`}>
+                        {result.error ? `✗ ${result.error.slice(0, 25)}` : `→ ${result.jobs} found`}
                       </span>
                     )}
                   </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
+
+                  {/* Actions */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => onScrape(source)}
                         disabled={!!scrapingId}
                         title="Scrape now"
-                        style={actionBtn('#1a3a2a', '#22c55e')}
+                        className="text-xs px-2.5 py-1 rounded-md border font-medium hover:bg-gray-50 disabled:opacity-40"
+                        style={{ color: '#059669', borderColor: '#6EE7B7' }}
                       >
-                        {isScraping ? '⟳' : '▶'}
+                        {isScraping ? '⏳' : '▶ Scrape'}
                       </button>
                       <button
                         onClick={() => onToggle(source.id, !source.active)}
                         title={source.active ? 'Disable' : 'Enable'}
-                        style={actionBtn('#2a2a1a', '#facc15')}
+                        className="text-xs px-2.5 py-1 rounded-md border font-medium hover:bg-gray-50"
+                        style={{ color: '#D97706', borderColor: '#FDE68A' }}
                       >
-                        {source.active ? '⏸' : '▶'}
+                        {source.active ? 'Disable' : 'Enable'}
                       </button>
                       <button
                         onClick={() => onDelete(source.id)}
                         title="Remove"
-                        style={actionBtn('#2a1a1a', '#ef4444')}
+                        className="text-xs px-2.5 py-1 rounded-md border font-medium hover:bg-red-50"
+                        style={{ color: '#DC2626', borderColor: '#FECACA' }}
                       >
-                        ✕
+                        Remove
                       </button>
                     </div>
                   </td>
@@ -370,25 +374,3 @@ function SourceTable({
     </div>
   )
 }
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: '#0a0a0a',
-  border: '1px solid #333',
-  borderRadius: 6,
-  padding: '9px 12px',
-  color: '#fff',
-  fontSize: 14,
-  boxSizing: 'border-box',
-}
-
-const actionBtn = (bg: string, color: string): React.CSSProperties => ({
-  background: bg,
-  color,
-  border: `1px solid ${color}44`,
-  borderRadius: 4,
-  padding: '4px 8px',
-  cursor: 'pointer',
-  fontSize: 12,
-  lineHeight: 1,
-})
