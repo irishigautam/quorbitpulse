@@ -9,6 +9,7 @@ import type { Job } from '@/types'
 export interface IntegrationConfig {
   platform: string
   status: string
+  mode?: string | null        // 'owned' | 'managed' | null
   access_token?: string | null
   refresh_token?: string | null
   api_key?: string | null

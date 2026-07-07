@@ -26,6 +26,8 @@ export async function GET() {
   // Merge registry defs with live status
   const statuses = INTEGRATIONS.map(def => {
     const cfg = configMap.get(def.id)
+    // managed_available = platform supports managed AND server env var is set
+    const managedAvailable = def.supports_managed && !!def.env_key && !!process.env[def.env_key]
     return {
       id: def.id,
       name: def.name,
@@ -39,6 +41,8 @@ export async function GET() {
       quick_url: def.quick_url,
       key2_label: def.key2_label,
       available: def.available,
+      supports_managed: def.supports_managed,
+      managed_available: managedAvailable,
       status: cfg?.status ?? (def.connection_type === 'feed' ? 'connected' : 'disconnected'),
       mode: cfg?.mode ?? null,
       connected_at: cfg?.connected_at ?? null,

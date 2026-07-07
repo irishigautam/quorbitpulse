@@ -18,6 +18,8 @@ interface Integration {
   quick_url?: string
   key2_label?: string
   available: boolean
+  supports_managed: boolean
+  managed_available: boolean
   status: string
   mode: string | null
   connected_at?: string
@@ -30,6 +32,7 @@ function IntegrationsContent() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'connected' | 'india' | 'global'>('all')
   const [connecting, setConnecting] = useState<string | null>(null)
+  const [togglingManaged, setTogglingManaged] = useState<string | null>(null)
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, { key: string; key2: string }>>({})
   const [expandedCard, setExpandedCard] = useState<string | null>(null)
   const [toast, setToast] = useState('')
@@ -128,6 +131,26 @@ function IntegrationsContent() {
     setConnecting(null)
   }
 
+  async function handleToggleManaged(id: string, enable: boolean) {
+    setTogglingManaged(id)
+    const res = await fetch('/api/integrations/toggle-managed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform: id, enabled: enable }),
+    })
+    if (res.ok) {
+      setIntegrations(prev => prev.map(i => i.id === id
+        ? { ...i, status: enable ? 'connected' : 'disconnected', mode: enable ? 'managed' : null }
+        : i
+      ))
+      const name = integrations.find(i => i.id === id)?.name ?? id
+      showToast(enable ? `✓ ${name}: managed mode enabled` : `${name}: managed mode disabled`)
+    } else {
+      showToast('Failed to update managed mode', true)
+    }
+    setTogglingManaged(null)
+  }
+
   const filtered = integrations.filter(i => {
     if (filter === 'connected') return i.status === 'connected'
     if (filter === 'india') return i.region.includes('india')
@@ -204,12 +227,14 @@ function IntegrationsContent() {
               integ={integ}
               isExpanded={expandedCard === integ.id}
               isConnecting={connecting === integ.id}
+              isTogglingManaged={togglingManaged === integ.id}
               apiKeyInput={apiKeyInputs[integ.id] ?? { key: '', key2: '' }}
               onApiKeyChange={(field, val) =>
                 setApiKeyInputs(prev => ({ ...prev, [integ.id]: { ...(prev[integ.id] ?? { key: '', key2: '' }), [field]: val } }))}
               onConnect={() => handleConnect(integ.id)}
               onSaveApiKey={() => handleSaveApiKey(integ.id)}
               onDisconnect={() => handleDisconnect(integ.id)}
+              onToggleManaged={(enable) => handleToggleManaged(integ.id, enable)}
               appUrl={APP_URL}
             />
           ))}
@@ -219,35 +244,54 @@ function IntegrationsContent() {
   )
 }
 
+function statusBadge(integ: Integration) {
+  if (integ.connection_type === 'feed') {
+    return { label: '● Always active', bg: '#DCFCE7', color: '#166534' }
+  }
+  if (integ.status !== 'connected') {
+    return { label: '○ Not connected', bg: '#F3F4F6', color: '#6B7280' }
+  }
+  if (integ.mode === 'managed') {
+    return { label: '● Active · Managed', bg: '#EEF2FF', color: '#4338CA' }
+  }
+  return { label: '● Active · Your account', bg: '#DCFCE7', color: '#166534' }
+}
+
 function IntegrationCard({
   integ,
   isExpanded,
   isConnecting,
+  isTogglingManaged,
   apiKeyInput,
   onApiKeyChange,
   onConnect,
   onSaveApiKey,
   onDisconnect,
+  onToggleManaged,
   appUrl,
 }: {
   integ: Integration
   isExpanded: boolean
   isConnecting: boolean
+  isTogglingManaged: boolean
   apiKeyInput: { key: string; key2: string }
   onApiKeyChange: (field: 'key' | 'key2', val: string) => void
   onConnect: () => void
   onSaveApiKey: () => void
   onDisconnect: () => void
+  onToggleManaged: (enable: boolean) => void
   appUrl: string
 }) {
   const isConnected = integ.status === 'connected'
   const isFeed = integ.connection_type === 'feed'
   const feedUrl = integ.feed_path ? `${appUrl}${integ.feed_path}` : ''
+  const isDualMode = integ.supports_managed && integ.managed_available && integ.connection_type === 'api_key'
+  const badge = statusBadge(integ)
 
   return (
     <div style={{
       background: '#fff',
-      border: `1px solid ${isConnected ? '#86EFAC' : 'var(--border)'}`,
+      border: `1px solid ${isConnected ? (integ.mode === 'managed' ? '#A5B4FC' : '#86EFAC') : 'var(--border)'}`,
       borderRadius: 12,
       padding: '1.125rem',
       display: 'flex',
@@ -277,10 +321,10 @@ function IntegrationCard({
               padding: '2px 8px',
               borderRadius: 999,
               fontWeight: 600,
-              background: isConnected ? '#DCFCE7' : '#F3F4F6',
-              color: isConnected ? '#166534' : '#6B7280',
+              background: badge.bg,
+              color: badge.color,
             }}>
-              {isConnected ? '● Connected' : isFeed ? '● Always active' : '○ Not connected'}
+              {badge.label}
             </span>
           </div>
           <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '0.2rem 0 0', lineHeight: 1.4 }}>
@@ -299,6 +343,11 @@ function IntegrationCard({
         <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: '#EEF2FF', color: '#4338CA' }}>
           {integ.connection_type === 'oauth' ? '🔑 OAuth' : integ.connection_type === 'api_key' ? '🔐 API Key' : integ.connection_type === 'feed' ? '📡 Auto' : '⚡ Quick Post'}
         </span>
+        {isDualMode && (
+          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, background: '#FEF3C7', color: '#92400E' }}>
+            ✦ Dual mode
+          </span>
+        )}
       </div>
 
       {/* Connected info */}
@@ -330,82 +379,204 @@ function IntegrationCard({
         </div>
       )}
 
-      {/* API key form */}
-      {integ.connection_type === 'api_key' && isExpanded && !isConnected && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: '#F9FAFB', borderRadius: 8, border: '1px solid var(--border)' }}>
-          <input
-            type="text"
-            placeholder="API Key"
-            value={apiKeyInput.key}
-            onChange={e => onApiKeyChange('key', e.target.value)}
-            style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.875rem' }}
-          />
-          {integ.key2_label && (
-            <input
-              type="text"
-              placeholder={integ.key2_label}
-              value={apiKeyInput.key2}
-              onChange={e => onApiKeyChange('key2', e.target.value)}
-              style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.875rem' }}
-            />
+      {/* ── Dual-mode section ─────────────────────────────────────────── */}
+      {isDualMode && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+
+          {/* Managed option */}
+          <div style={{
+            padding: '0.75rem',
+            background: integ.mode === 'managed' ? '#EEF2FF' : '#F9FAFB',
+            borderRadius: 8,
+            border: `1px solid ${integ.mode === 'managed' ? '#C7D2FE' : 'var(--border)'}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: integ.mode === 'managed' ? '#4338CA' : 'inherit' }}>
+                  ✦ Managed by Quorbit
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.1rem' }}>
+                  Post via Quorbit&#39;s platform account. No credentials needed.
+                </div>
+              </div>
+              {integ.mode === 'managed' ? (
+                <button
+                  onClick={() => onToggleManaged(false)}
+                  disabled={isTogglingManaged}
+                  style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', border: '1px solid #C7D2FE', borderRadius: 6, background: '#fff', color: '#4338CA', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  {isTogglingManaged ? '…' : 'Disable'}
+                </button>
+              ) : !isConnected ? (
+                <button
+                  onClick={() => onToggleManaged(true)}
+                  disabled={isTogglingManaged}
+                  style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', border: 'none', borderRadius: 6, background: '#4338CA', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  {isTogglingManaged ? '…' : 'Enable →'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => onToggleManaged(true)}
+                  disabled={isTogglingManaged}
+                  style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  {isTogglingManaged ? '…' : 'Switch →'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>or use your own account</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
+
+          {/* Own account form */}
+          {integ.mode === 'owned' ? (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 500, flex: 1 }}>Your account is connected.</span>
+              <button
+                onClick={onDisconnect}
+                disabled={isConnecting}
+                style={{ fontSize: '0.75rem', color: '#DC2626', background: 'none', border: '1px solid #FECACA', borderRadius: 6, padding: '0.3rem 0.6rem', cursor: 'pointer' }}
+              >
+                Disconnect
+              </button>
+            </div>
+          ) : (
+            <div>
+              {isExpanded ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    placeholder="API Key"
+                    value={apiKeyInput.key}
+                    onChange={e => onApiKeyChange('key', e.target.value)}
+                    style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.875rem' }}
+                  />
+                  {integ.key2_label && (
+                    <input
+                      type="text"
+                      placeholder={integ.key2_label}
+                      value={apiKeyInput.key2}
+                      onChange={e => onApiKeyChange('key2', e.target.value)}
+                      style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.875rem' }}
+                    />
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={onSaveApiKey}
+                      disabled={isConnecting || !apiKeyInput.key}
+                      style={{ flex: 1, padding: '0.5rem', background: isConnecting ? 'var(--muted)' : integ.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {isConnecting ? 'Saving…' : 'Save & Connect'}
+                    </button>
+                    <button
+                      onClick={onConnect}
+                      style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', cursor: 'pointer', background: '#fff' }}
+                    >
+                      Cancel
+                    </button>
+                    {integ.docs_url && (
+                      <a href={integ.docs_url} target="_blank" rel="noreferrer"
+                        style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'inherit' }}>
+                        Get key ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={onConnect}
+                  style={{ padding: '0.35rem 0.875rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', cursor: 'pointer', background: '#fff', width: '100%', textAlign: 'left' }}
+                >
+                  Connect your own account →
+                </button>
+              )}
+            </div>
           )}
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={onSaveApiKey}
-              disabled={isConnecting || !apiKeyInput.key}
-              style={{ flex: 1, padding: '0.5rem', background: isConnecting ? 'var(--muted)' : integ.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
-            >
-              {isConnecting ? 'Saving…' : 'Save & Connect'}
-            </button>
-            {integ.docs_url && (
+        </div>
+      )}
+
+      {/* ── Single-mode action buttons (non-dual-mode platforms) ─────── */}
+      {!isDualMode && !isFeed && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {/* API key form (non-dual-mode) */}
+          {integ.connection_type === 'api_key' && isExpanded && !isConnected && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem', background: '#F9FAFB', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <input
+                type="text"
+                placeholder="API Key"
+                value={apiKeyInput.key}
+                onChange={e => onApiKeyChange('key', e.target.value)}
+                style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.875rem' }}
+              />
+              {integ.key2_label && (
+                <input
+                  type="text"
+                  placeholder={integ.key2_label}
+                  value={apiKeyInput.key2}
+                  onChange={e => onApiKeyChange('key2', e.target.value)}
+                  style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.875rem' }}
+                />
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={onSaveApiKey}
+                  disabled={isConnecting || !apiKeyInput.key}
+                  style={{ flex: 1, padding: '0.5rem', background: isConnecting ? 'var(--muted)' : integ.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isConnecting ? 'Saving…' : 'Save & Connect'}
+                </button>
+                {integ.docs_url && (
+                  <a href={integ.docs_url} target="_blank" rel="noreferrer"
+                    style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'inherit' }}>
+                    Get key ↗
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+            {isConnected ? (
+              <button
+                onClick={onDisconnect}
+                disabled={isConnecting}
+                style={{ fontSize: '0.8rem', color: '#DC2626', background: 'none', border: '1px solid #FECACA', borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer' }}
+              >
+                Disconnect
+              </button>
+            ) : integ.connection_type === 'quick' ? (
+              <a
+                href={integ.quick_url?.replace('{title}', 'Job Opening').replace('{company}', '').replace('{location}', '').replace('{description}', '') ?? '#'}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'inline-block', padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+              >
+                Quick Post ↗
+              </a>
+            ) : (
+              <button
+                onClick={onConnect}
+                disabled={isConnecting}
+                style={{ padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                {integ.connection_type === 'api_key' ? (isExpanded ? 'Cancel ↑' : 'Connect →') : 'Connect →'}
+              </button>
+            )}
+            {integ.docs_url && !isConnected && (
               <a href={integ.docs_url} target="_blank" rel="noreferrer"
-                style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'inherit' }}>
-                Get key ↗
+                style={{ padding: '0.4rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'var(--muted)' }}>
+                Docs ↗
               </a>
             )}
           </div>
         </div>
       )}
-
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
-        {isFeed ? null
-          : isConnected ? (
-            <button
-              onClick={onDisconnect}
-              disabled={isConnecting}
-              style={{ fontSize: '0.8rem', color: '#DC2626', background: 'none', border: '1px solid #FECACA', borderRadius: 6, padding: '0.4rem 0.75rem', cursor: 'pointer' }}
-            >
-              Disconnect
-            </button>
-          )
-          : integ.connection_type === 'quick' ? (
-            <a
-              href={integ.quick_url?.replace('{title}', 'Job Opening').replace('{company}', '').replace('{location}', '').replace('{description}', '') ?? '#'}
-              target="_blank"
-              rel="noreferrer"
-              style={{ display: 'inline-block', padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
-            >
-              Quick Post ↗
-            </a>
-          )
-          : (
-            <button
-              onClick={onConnect}
-              disabled={isConnecting}
-              style={{ padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', border: 'none', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
-            >
-              {integ.connection_type === 'api_key' ? (isExpanded ? 'Cancel ↑' : 'Connect →') : 'Connect →'}
-            </button>
-          )
-        }
-        {integ.docs_url && !isFeed && !isConnected && (
-          <a href={integ.docs_url} target="_blank" rel="noreferrer"
-            style={{ padding: '0.4rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'var(--muted)' }}>
-            Docs ↗
-          </a>
-        )}
-      </div>
     </div>
   )
 }

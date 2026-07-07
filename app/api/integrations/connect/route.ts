@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       company_id: companyId,
       platform,
       status: 'connected',
+      mode: 'owned',
       api_key,
       extra_key: extra_key ?? null,
       connected_at: new Date().toISOString(),
