@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -10,6 +10,13 @@ export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error') === 'link_expired') {
+      setError('That link has expired or already been used. Request a new one below.')
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,6 +100,12 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in…' : 'Sign in →'}
           </button>
+
+          <p className="text-right text-xs mt-1">
+            <Link href="/onboarding/forgot-password" style={{ color: 'var(--accent)' }}>
+              Forgot password?
+            </Link>
+          </p>
         </form>
 
         <p className="text-center text-xs mt-4" style={{ color: 'var(--muted)' }}>
