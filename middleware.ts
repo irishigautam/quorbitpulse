@@ -66,7 +66,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/security')) {
     if (!user) {
       const url = request.nextUrl.clone()
-      url.pathname = '/onboarding/signup'
+      url.pathname = '/onboarding/login'
       url.searchParams.set('redirectTo', pathname)
       return NextResponse.redirect(url)
     }
@@ -84,6 +84,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
