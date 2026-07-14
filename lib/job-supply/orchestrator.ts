@@ -54,7 +54,7 @@ function normaliseAdzuna(job: AdzunaJob): RawJobListing {
 // ── Fetch from all sources ─────────────────────────────────────────────────
 
 async function fetchFromAllSources(
-  opts: { serpApiSearches?: number } = {}
+  opts: { serpApiSearches?: number; skipCareerPages?: boolean; parallelFetch?: boolean } = {}
 ): Promise<{ jobs: RawJobListing[]; sources: Record<string, number> }> {
   const sources: Record<string, number> = {}
   const allJobs: RawJobListing[] = []
@@ -100,44 +100,85 @@ async function fetchFromAllSources(
     console.log('SerpAPI: skipped (no SERPAPI_KEY)')
   }
 
-  // 3. Remotive (free)
-  try {
-    const remotiveJobs = await fetchRemotiveJobs()
-    allJobs.push(...remotiveJobs)
-    sources['remotive'] = remotiveJobs.length
-  } catch (err) {
-    console.error('Remotive error:', err)
-    sources['remotive'] = 0
-  }
+  // 3-5. Free job APIs — run in parallel when parallelFetch=true (saves ~20s)
+  if (opts.parallelFetch) {
+    console.log('Free APIs: fetching Remotive + Arbeitnow + Jobicy in parallel...')
+    const [remotiveJobs, arbeitnowJobs, jobicyJobs] = await Promise.allSettled([
+      fetchRemotiveJobs(),
+      fetchArbeitnowJobs(2),   // 2 pages is enough for a quick run
+      fetchJobicyJobs(),
+    ])
 
-  // 4. Arbeitnow (free)
-  try {
-    const arbeitnowJobs = await fetchArbeitnowJobs()
-    allJobs.push(...arbeitnowJobs)
-    sources['arbeitnow'] = arbeitnowJobs.length
-  } catch (err) {
-    console.error('Arbeitnow error:', err)
-    sources['arbeitnow'] = 0
-  }
+    if (remotiveJobs.status === 'fulfilled') {
+      allJobs.push(...remotiveJobs.value)
+      sources['remotive'] = remotiveJobs.value.length
+    } else {
+      console.error('Remotive error:', remotiveJobs.reason)
+      sources['remotive'] = 0
+    }
 
-  // 5. Jobicy (free)
-  try {
-    const jobicyJobs = await fetchJobicyJobs()
-    allJobs.push(...jobicyJobs)
-    sources['jobicy'] = jobicyJobs.length
-  } catch (err) {
-    console.error('Jobicy error:', err)
-    sources['jobicy'] = 0
+    if (arbeitnowJobs.status === 'fulfilled') {
+      allJobs.push(...arbeitnowJobs.value)
+      sources['arbeitnow'] = arbeitnowJobs.value.length
+    } else {
+      console.error('Arbeitnow error:', arbeitnowJobs.reason)
+      sources['arbeitnow'] = 0
+    }
+
+    if (jobicyJobs.status === 'fulfilled') {
+      allJobs.push(...jobicyJobs.value)
+      sources['jobicy'] = jobicyJobs.value.length
+    } else {
+      console.error('Jobicy error:', jobicyJobs.reason)
+      sources['jobicy'] = 0
+    }
+  } else {
+    // Sequential (default — used by cron)
+    // 3. Remotive (free)
+    try {
+      const remotiveJobs = await fetchRemotiveJobs()
+      allJobs.push(...remotiveJobs)
+      sources['remotive'] = remotiveJobs.length
+    } catch (err) {
+      console.error('Remotive error:', err)
+      sources['remotive'] = 0
+    }
+
+    // 4. Arbeitnow (free)
+    try {
+      const arbeitnowJobs = await fetchArbeitnowJobs()
+      allJobs.push(...arbeitnowJobs)
+      sources['arbeitnow'] = arbeitnowJobs.length
+    } catch (err) {
+      console.error('Arbeitnow error:', err)
+      sources['arbeitnow'] = 0
+    }
+
+    // 5. Jobicy (free)
+    try {
+      const jobicyJobs = await fetchJobicyJobs()
+      allJobs.push(...jobicyJobs)
+      sources['jobicy'] = jobicyJobs.length
+    } catch (err) {
+      console.error('Jobicy error:', err)
+      sources['jobicy'] = 0
+    }
   }
 
   // 6. Career page scraper (company-specific career pages)
-  try {
-    const careerJobs = await fetchFromCareerPages()
-    allJobs.push(...careerJobs.jobs)
-    sources['career_page'] = careerJobs.jobs.length
-  } catch (err) {
-    console.error('Career page scraper error:', err)
-    sources['career_page'] = 0
+  //    Skipped in admin quick-trigger (skipCareerPages=true) — too slow for a 60s limit.
+  //    Always runs in the daily cron.
+  if (!opts.skipCareerPages) {
+    try {
+      const careerJobs = await fetchFromCareerPages()
+      allJobs.push(...careerJobs.jobs)
+      sources['career_page'] = careerJobs.jobs.length
+    } catch (err) {
+      console.error('Career page scraper error:', err)
+      sources['career_page'] = 0
+    }
+  } else {
+    console.log('Career pages: skipped (skipCareerPages=true)')
   }
 
   return { jobs: allJobs, sources }
@@ -300,13 +341,18 @@ async function enrichPendingListings(limit = 50): Promise<number> {
 // ── Main entry point ───────────────────────────────────────────────────────
 
 export async function runIngest(
-  opts: { serpApiSearches?: number; enrichLimit?: number } = {}
+  opts: {
+    serpApiSearches?: number
+    enrichLimit?: number
+    skipCareerPages?: boolean
+    parallelFetch?: boolean
+  } = {}
 ): Promise<IngestStats> {
   const stats: IngestStats = {
     fetched: 0, new: 0, updated: 0, skipped: 0, enriched: 0, errors: 0, sources: {}
   }
 
-  console.log('Job ingest: starting...')
+  console.log('Job ingest: starting...', JSON.stringify({ skipCareerPages: opts.skipCareerPages, parallelFetch: opts.parallelFetch }))
 
   // Step 1: Fetch from all sources
   const { jobs: raw, sources } = await fetchFromAllSources(opts)
