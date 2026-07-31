@@ -306,7 +306,7 @@ footer {
   <div id="phaseContainer"></div>
 </div>
 
-<footer>Quorbit · v9 — Business-first strategy · Click badges to update · Auto-saved · Live: <a href="https://pulse.thequorbit.com" target="_blank" style="color:#2196F3; text-decoration:none;">pulse.thequorbit.com</a></footer>
+<footer>Quorbit · v10 — Business-first strategy · Click badges to update · Auto-saved · Live: <a href="https://pulse.thequorbit.com" target="_blank" style="color:#2196F3; text-decoration:none;">pulse.thequorbit.com</a></footer>
 
 <script>
 const PHASES = [
@@ -446,8 +446,8 @@ const PHASES = [
       { id: 'sec8', name: 'CVE-P-009/010: LLM export — no rate limit + no subscription check (MEDIUM)', status: 'built', note: '3 LLM export uploads/hr/company. checkLimit() + recordUsage() wired in. Prevents runaway Haiku spend from bulk exports.' },
       { id: 'sec9', name: 'CVE-P-011: Suggest-domain endpoint unauthenticated (MEDIUM)', status: 'built', note: 'IP-based rate limit: 60 req/hr. Protects proprietary skill taxonomy from bulk extraction.' },
       { id: 'sec10', name: 'Security audit report (.docx)', status: 'built', note: 'Full report: CVE IDs, severity badges, impact analysis, fix descriptions, required actions, env var checklist. Saved to Pulse folder.' },
-      { id: 'sec11', name: 'Distributed rate limiter (Redis/Upstash)', status: 'built', note: 'lib/security/rate-limit.ts rewritten. Async rateLimit() with Upstash sliding-window backend via dynamic import. Falls back to in-memory when UPSTASH_REDIS_REST_URL+TOKEN absent. All 9 callers updated to await. Add packages: npm install @upstash/ratelimit @upstash/redis. Add env vars in Vercel to activate.' },
-      { id: 'sec12', name: 'Resume PDF virus scanning', status: 'built', note: 'lib/security/virus-scan.ts — SHA-256 hash lookup against VirusTotal /files/{hash}. Wired into /api/candidate/resume before parseResume(). Fails open on timeout/missing key. Set VIRUSTOTAL_API_KEY in Vercel to activate.' },
+      { id: 'sec11', name: 'Distributed rate limiter (Redis/Upstash)', status: 'planned', note: 'Current in-memory rate limiter is per-serverless-instance (each Vercel cold start has fresh counters). Replace with @upstash/ratelimit before 500 MAU.' },
+      { id: 'sec12', name: 'Resume PDF virus scanning', status: 'planned', note: 'PDFs currently passed direct to Claude. Add VirusTotal or ClamAV before storing/rendering resume files.' },
     ]
   },
   {
@@ -481,8 +481,7 @@ const PHASES = [
       { id: 'inf4', name: 'ChatGPT Plugin / GPT Action', status: 'built', note: '/.well-known/ai-plugin.json — plugin manifest for ChatGPT discovery. /api/v1/openapi-gpt.json — GPT Action OpenAPI spec exposing scoreCandidate + searchCandidates. Bearer auth. Access-Control-Allow-Origin: chat.openai.com.' },
       { id: 'inf5', name: 'Match-to-find ratio benchmark report (annual)', status: 'built', note: 'GET /api/reports/match-to-find — public, no auth, cached 24h. Returns avg match score, score distribution (elite/strong/moderate/weak %), top 20 skills in demand, top 10 domains, hire rate. Anonymised across all companies.' },
     ]
-  }
-,
+  },
   {
     id: 'distribution',
     name: 'Phase 10 — Job Distribution',
@@ -494,6 +493,8 @@ const PHASES = [
       { id: 'dist3', name: 'Integration configs DB + hub UI', status: 'built', note: 'integration_configs table. /dashboard/integrations — shows all 14 platforms with connection status, last sync time, enable/disable toggle.' },
       { id: 'dist4', name: 'Distribution badges on job listings', status: 'built', note: 'Job list shows distribution_status per platform per job. Status badges: sent, pending, failed. Recruiter sees at a glance where each job is live.' },
       { id: 'dist5', name: 'Dual-mode integrations (managed vs. bring-your-own)', status: 'built', note: 'Fully implemented. mode column in integration_configs. Managed = Quorbit env creds injected via resolveManagedConfig() in distributor. Owned = company pastes API key (mode=\'owned\' set on connect). Hub UI: dual-mode card with enable/disable toggle + own account section. Shine, TimesJobs, ZipRecruiter supported. Commit: 69eccdec.' },
+      { id: 'dist6', name: 'LinkedIn OAuth app registered + Vercel env vars', status: 'built', note: 'LinkedIn "Quorbit Pulse" OAuth app created (App ID 261970176, Client ID 7755xxxm0q1l0j). Env vars added to Vercel (Production + Preview): NEXT_PUBLIC_LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET. Two redeployments triggered.' },
+      { id: 'dist7', name: 'Wellfound switched to quick-post mode', status: 'built', note: 'Wellfound public OAuth app registration is shut down — wellfound.com/oauth/applications returns DataDome CAPTCHA; API access requires direct partnership request. Switched registry.ts to connection_type: quick with pre-filled URL template (title, location). Distributor unaffected. OAuth callback route preserved for future partnership. Commit: b2ac2823.' },
     ]
   },
   {
@@ -527,6 +528,7 @@ const PHASES = [
       { id: 'gtm11', name: 'Landing page — proper marketing copy + pricing', status: 'planned', note: 'Current / is a bare holding page. Needs value prop, feature highlights, pricing table (Starter ₹2,999 / Growth ₹5,999 / Scale ₹12,999), and a strong CTA for first 10 customers.' },
       { id: 'gtm12', name: 'Distributed rate limiting (Redis / Upstash)', status: 'built', note: 'lib/security/rate-limit.ts rewritten. Async rateLimit() with Upstash sliding-window backend via dynamic import. Falls back to in-memory when UPSTASH_REDIS_REST_URL+TOKEN absent. All 9 callers updated to await. Add packages: npm install @upstash/ratelimit @upstash/redis. Add env vars in Vercel to activate.' },
       { id: 'gtm13', name: 'Resume PDF virus scanning', status: 'built', note: 'lib/security/virus-scan.ts — SHA-256 hash lookup against VirusTotal /files/{hash}. Wired into /api/candidate/resume before parseResume(). Fails open on timeout/missing key. Set VIRUSTOTAL_API_KEY in Vercel to activate.' },
+      { id: 'gtm14', name: 'Fix Anthopic_API_Key typo in Vercel Preview', status: 'built', note: 'Vercel Preview environment had misspelled key ANTHOPIC_API_KEY — corrected to ANTHROPIC_API_KEY. Sensitive env vars cannot be added to Development environment (Vercel platform limitation); Production + Preview is sufficient.' },
     ]
   }
 ];
