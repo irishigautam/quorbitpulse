@@ -3,40 +3,51 @@
  *
  * Uses the LinkedIn UGC Post API (no partner approval needed).
  * The recruiter connects their LinkedIn Company Page via OAuth in
- * /dashboard/settings/distribution — we store the access token + org URN.
+ * /dashboard/integrations — we store the access token + org URN
+ * in the integration_configs table.
  *
  * Docs: https://learn.microsoft.com/en-us/linkedin/marketing/integrations/community-management/shares/ugc-post-api
  */
 
 import type { Job } from '@/types'
 import type { Database } from '@/types/supabase'
-import type { DistributionResult } from './indeed'
+import type { IntegrationConfig, PostResult } from '@/lib/integrations/handlers'
 
 type Company = Database['public']['Tables']['companies']['Row']
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
 const LI_API = 'https://api.linkedin.com/v2'
 
+/**
+ * Distribute a job to LinkedIn via UGC Posts API.
+ *
+ * @param config - The integration_configs row for the 'linkedin' platform.
+ *   access_token = OAuth token, extra_key = org URN (urn:li:organization:XXXXXX).
+ *   Falls back to legacy company columns for backward compatibility.
+ */
 export async function distributeToLinkedIn(
   job: Job,
-  company: Company
-): Promise<DistributionResult> {
-  const token = (company as any).linkedin_access_token
-  const orgUrn = (company as any).linkedin_org_urn
+  company: Company,
+  config?: IntegrationConfig,
+): Promise<PostResult> {
+  // Prefer integration_configs (new schema), fall back to company columns (legacy)
+  const token = config?.access_token ?? (company as any).linkedin_access_token
+  const orgUrn = config?.extra_key ?? (company as any).linkedin_org_urn
 
   if (!token || !orgUrn) {
     return {
       status: 'skipped',
-      error: 'LinkedIn not connected — visit Settings → Distribution to connect.',
+      error: 'LinkedIn not connected — visit Integrations to connect.',
       distributed_at: new Date().toISOString(),
     }
   }
 
-  const expiresAt = (company as any).linkedin_token_expires_at
+  // Check token expiry from integration_configs row
+  const expiresAt = config?.expires_at ?? (company as any).linkedin_token_expires_at
   if (expiresAt && new Date(expiresAt) < new Date()) {
     return {
       status: 'error',
-      error: 'LinkedIn token expired — reconnect in Settings → Distribution.',
+      error: 'LinkedIn token expired — reconnect in Integrations.',
       distributed_at: new Date().toISOString(),
     }
   }
@@ -94,10 +105,10 @@ ${jobUrl}
     })
 
     if (!res.ok) {
-      const err = await res.text()
+      const errText = await res.text()
       return {
         status: 'error',
-        error: `LinkedIn API ${res.status}: ${err}`,
+        error: `LinkedIn API ${res.status}: ${errText}`,
         distributed_at: new Date().toISOString(),
       }
     }

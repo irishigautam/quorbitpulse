@@ -6,10 +6,9 @@
  *
  * Body: { platform: string, enabled: boolean }
  *
- * If enabling:
- *   - Upserts integration_configs row with mode='managed', status='connected'
- * If disabling:
- *   - Sets mode='disabled', status='disconnected' (unless they have an owned connection)
+ * NOTE: requireCompany() is called OUTSIDE the try/catch block so that
+ * NEXT_REDIRECT (thrown on auth failure) propagates correctly to Next.js
+ * instead of being caught and converted to a 500 error.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,8 +19,10 @@ import { getIntegration } from '@/lib/integrations/registry'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
+  // Auth OUTSIDE try/catch — NEXT_REDIRECT must not be swallowed
+  const { companyId } = await requireCompany()
+
   try {
-    const { companyId } = await requireCompany()
     const { platform, enabled } = await req.json()
 
     if (!platform || typeof enabled !== 'boolean') {
@@ -42,7 +43,6 @@ export async function POST(req: NextRequest) {
     const supabase = createServiceClient()
 
     if (enabled) {
-      // Enable managed mode — upsert as managed/connected
       await supabase.from('integration_configs').upsert({
         company_id: companyId,
         platform,
@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'company_id,platform' })
     } else {
-      // Disable managed mode — check if they have an owned connection first
       const { data: existing } = await supabase
         .from('integration_configs')
         .select('mode')
@@ -60,12 +59,9 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (existing?.mode === 'owned') {
-        // Don't touch their owned connection — they're just opting out of managed
-        // (managed doesn't apply to owned anyway, so this is a no-op)
         return NextResponse.json({ ok: true, note: 'owned connection unchanged' })
       }
 
-      // Remove or disable the managed row
       await supabase
         .from('integration_configs')
         .update({ mode: 'disabled', status: 'disconnected', updated_at: new Date().toISOString() })

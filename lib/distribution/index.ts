@@ -84,7 +84,9 @@ export async function distributeJob(
   })
 
   // ── Owned + managed connections ───────────────────────────────────
-  if (configMap.has('linkedin'))    tasks.linkedin    = () => distributeToLinkedIn(job, company)
+  // Pass the integration config so LinkedIn reads access_token from integration_configs,
+  // not the old company.linkedin_access_token column (which no longer exists).
+  if (configMap.has('linkedin'))    tasks.linkedin    = () => distributeToLinkedIn(job, company, configMap.get('linkedin'))
   if (configMap.has('wellfound'))   tasks.wellfound   = () => postToWellfound(job, configMap.get('wellfound')!)
   if (configMap.has('naukri'))      tasks.naukri      = () => distributeToNaukri(job, company, configMap.get('naukri'))
   if (configMap.has('shine'))       tasks.shine       = () => postToShine(job, resolveManagedConfig(configMap.get('shine')!, 'shine'))

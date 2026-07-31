@@ -30,6 +30,7 @@ function IntegrationsContent() {
   const searchParams = useSearchParams()
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [filter, setFilter] = useState<'all' | 'connected' | 'india' | 'global'>('all')
   const [connecting, setConnecting] = useState<string | null>(null)
   const [togglingManaged, setTogglingManaged] = useState<string | null>(null)
@@ -43,14 +44,21 @@ function IntegrationsContent() {
 
   useEffect(() => {
     if (successParam) showToast(`✓ ${successParam.replace('_', ' ')} connected successfully!`)
-    if (errorParam) showToast(`⚠ Connection failed: ${errorParam.replace('_', ' ')}`, true)
+    if (errorParam) showToast(`⚠ Connection failed: ${errorParam.replace(/_/g, ' ')}`, true)
   }, [successParam, errorParam])
 
   useEffect(() => {
     fetch('/api/integrations/status')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then(d => {
         setIntegrations(d.integrations ?? [])
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoadError(true)
         setLoading(false)
       })
   }, [])
@@ -67,17 +75,27 @@ function IntegrationsContent() {
 
     if (integ.connection_type === 'oauth') {
       if (id === 'linkedin') {
+        const clientId = process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID
+        if (!clientId) {
+          showToast('LinkedIn OAuth not configured — contact your admin.', true)
+          return
+        }
         const params = new URLSearchParams({
           response_type: 'code',
-          client_id: process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID ?? '',
+          client_id: clientId,
           redirect_uri: `${APP_URL}/api/auth/linkedin/callback`,
           scope: 'w_organization_social r_organization_social rw_organization_admin',
         })
         window.location.href = `https://www.linkedin.com/oauth/v2/authorization?${params}`
       } else if (id === 'wellfound') {
+        const clientId = process.env.NEXT_PUBLIC_WELLFOUND_CLIENT_ID
+        if (!clientId) {
+          showToast('Wellfound OAuth not configured — contact your admin.', true)
+          return
+        }
         const params = new URLSearchParams({
           response_type: 'code',
-          client_id: process.env.NEXT_PUBLIC_WELLFOUND_CLIENT_ID ?? '',
+          client_id: clientId,
           redirect_uri: `${APP_URL}/api/auth/wellfound/callback`,
           scope: 'jobs:write',
         })
@@ -219,6 +237,10 @@ function IntegrationsContent() {
 
       {loading ? (
         <div style={{ color: 'var(--muted)', padding: '2rem', textAlign: 'center' }}>Loading integrations…</div>
+      ) : loadError ? (
+        <div style={{ color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '1rem 1.25rem', fontSize: '0.875rem' }}>
+          Failed to load integrations. <button onClick={() => window.location.reload()} style={{ color: '#DC2626', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '0.875rem' }}>
           {filtered.map(integ => (
