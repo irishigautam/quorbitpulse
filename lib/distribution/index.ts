@@ -3,8 +3,9 @@
  *
  * Always-on (feed, no credentials): google, indeed, glassdoor
  * Owned (recruiter's own account): linkedin, wellfound
- * Dual-mode — managed (Quorbit env creds) OR owned: naukri, shine, timesjobs, ziprecruiter
- * Quick post (never auto-distributed): iimjobs, hirist, internshala, apna, cutshort
+ * Dual-mode — managed (Quorbit env creds) OR owned: naukri, shine, timesjobs, foundit, ziprecruiter
+ * Quick post (never auto-distributed): iimjobs, hirist, internshala, apna, cutshort,
+ *   instahyre, workindia, freshersworld, hirect
  */
 
 import { createServiceClient } from '@/lib/supabase/server'
@@ -14,6 +15,7 @@ import { distributeToNaukri } from './naukri'
 import {
   postToShine,
   postToTimesJobs,
+  postToFoundit,
   postToZipRecruiter,
   postToWellfound,
   type IntegrationConfig,
@@ -35,6 +37,7 @@ export interface DistributionReport {
 const MANAGED_CREDS: Record<string, { key: string; extra?: string }> = {
   shine:        { key: process.env.SHINE_API_KEY ?? '',       extra: process.env.SHINE_RECRUITER_ID ?? '' },
   timesjobs:    { key: process.env.TIMESJOBS_API_KEY ?? '',   extra: process.env.TIMESJOBS_PARTNER_ID ?? '' },
+  foundit:      { key: process.env.FOUNDIT_API_KEY ?? '',     extra: process.env.FOUNDIT_RECRUITER_ID ?? '' },
   ziprecruiter: { key: process.env.ZIPRECRUITER_API_KEY ?? '' },
 }
 
@@ -91,6 +94,7 @@ export async function distributeJob(
   if (configMap.has('naukri'))      tasks.naukri      = () => distributeToNaukri(job, company, configMap.get('naukri'))
   if (configMap.has('shine'))       tasks.shine       = () => postToShine(job, resolveManagedConfig(configMap.get('shine')!, 'shine'))
   if (configMap.has('timesjobs'))   tasks.timesjobs   = () => postToTimesJobs(job, resolveManagedConfig(configMap.get('timesjobs')!, 'timesjobs'))
+  if (configMap.has('foundit'))     tasks.foundit     = () => postToFoundit(job, resolveManagedConfig(configMap.get('foundit')!, 'foundit'))
   if (configMap.has('ziprecruiter')) tasks.ziprecruiter = () => postToZipRecruiter(job, resolveManagedConfig(configMap.get('ziprecruiter')!, 'ziprecruiter'))
 
   // Run all in parallel

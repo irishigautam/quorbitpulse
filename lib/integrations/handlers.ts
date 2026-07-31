@@ -82,6 +82,65 @@ function mapJobTypeShine(type: string | null): string {
   }
 }
 
+// ── Foundit (Monster India) ───────────────────────────────────────────────────
+
+export async function postToFoundit(job: Job, config: IntegrationConfig): Promise<PostResult> {
+  if (!config.api_key || !config.extra_key) {
+    return skip('Foundit API key not configured')
+  }
+
+  const payload = {
+    jobTitle: job.title,
+    jobDescription: job.description,
+    location: [job.location],
+    jobType: mapJobTypeFoundit(job.job_type),
+    isRemote: !!job.remote,
+    minExperienceYrs: job.min_experience ?? 0,
+    maxExperienceYrs: (job.min_experience ?? 0) + 5,
+    salaryMin: job.salary_min ?? undefined,
+    salaryMax: job.salary_max ?? undefined,
+    currency: job.salary_currency === '₹' ? 'INR' : job.salary_currency ?? 'INR',
+    skills: Array.isArray(job.skills) ? (job.skills as string[]).slice(0, 15) : [],
+    applyUrl: job.apply_url ?? `${APP_URL}/jobs/${job.id}`,
+    openings: 1,
+    expiryDate: job.expires_at ? job.expires_at.split('T')[0] : undefined,
+  }
+
+  try {
+    const res = await fetch('https://api.foundit.in/recruiter/v1/jobs', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': config.api_key,
+        'X-RECRUITER-ID': config.extra_key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000),
+    })
+
+    if (!res.ok) {
+      return err(`Foundit API ${res.status}: ${await res.text()}`)
+    }
+
+    const data = await res.json()
+    const jobId = data?.jobId ?? data?.id
+    return ok(jobId ? `https://www.foundit.in/job/${jobId}` : undefined)
+  } catch (e) {
+    return err(String(e))
+  }
+}
+
+function mapJobTypeFoundit(type: string | null): string {
+  switch (type) {
+    case 'full_time': return 'FULL_TIME'
+    case 'part_time': return 'PART_TIME'
+    case 'contract': return 'CONTRACT'
+    case 'internship': return 'INTERNSHIP'
+    case 'freelance': return 'CONTRACT'
+    default: return 'FULL_TIME'
+  }
+}
+
 // ── TimesJobs ────────────────────────────────────────────────────────────────
 
 export async function postToTimesJobs(job: Job, config: IntegrationConfig): Promise<PostResult> {

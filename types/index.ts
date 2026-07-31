@@ -224,6 +224,11 @@ export interface CandidateProfile {
   years_experience: number | null
   fingerprint_summary: string | null
   resume_processed_at: string | null
+  // LinkedIn enrichment
+  projects: { name: string; description: string; url: string | null }[]
+  certifications: { name: string; issuer: string; issued_at: string | null }[]
+  publications: { title: string; url: string | null; published_at: string | null }[]
+  linkedin_synced_at: string | null
   created_at: string
   updated_at: string
 }
