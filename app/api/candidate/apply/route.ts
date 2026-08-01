@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logEvent } from '@/lib/analytics/log-event'
+import { computeMatchScore } from '@/lib/scoring/engine'
+import type { CandidateFingerprint } from '@/lib/scoring/fingerprint'
 import type { CandidateProfile } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
     // Fetch job to get company_id and verify it's active
     const { data: job, error: jobErr } = await supabase
       .from('jobs')
-      .select('id, title, company_id, status')
+      .select('id, title, company_id, status, domain, skills, min_experience')
       .eq('id', job_id)
       .single()
 
@@ -79,26 +81,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already applied to this job' }, { status: 409 })
     }
 
-    // Calculate a quick match score using candidate's fingerprint
+    // Score using the same weighted engine the recruiter's manual
+    // score-batch/blend-scores routes use (lib/scoring/engine.ts), instead
+    // of the previous ad hoc inline heuristic — the two scoring paths
+    // disagreeing was flagged as a real inconsistency during the P0-023
+    // code trace. The candidate's fingerprint (skills/domain/seniority/
+    // years_experience) was already extracted once at resume-upload time,
+    // so no extra AI call is needed here — just reuse it.
     const { data: candidateData } = await supabase
       .from('candidate_profiles')
       .select('skills, domain, years_experience, seniority')
       .eq('id', candidate.id)
       .single()
 
-    const candidateSkills = new Set((candidateData?.skills ?? []).map((s: string) => s.toLowerCase()))
-    const candidateDomain = new Set((candidateData?.domain ?? []).map((d: string) => d.toLowerCase()))
-    const jobSkills = (job as any).skills ?? []
-    const jobDomain = (job as any).domain ?? []
+    const fingerprint: CandidateFingerprint = {
+      domain: candidateData?.domain ?? [],
+      seniority: candidateData?.seniority ?? null,
+      skills: candidateData?.skills ?? [],
+      years_experience: candidateData?.years_experience ?? null,
+      summary: '',
+    }
 
-    const skillMatch = jobSkills.length
-      ? jobSkills.filter((s: string) => candidateSkills.has(s.toLowerCase())).length / jobSkills.length
-      : 0.5
-    const domainMatch = jobDomain.length
-      ? jobDomain.filter((d: string) => candidateDomain.has(d.toLowerCase())).length / jobDomain.length
-      : 0.5
-
-    const matchScore = Math.round((skillMatch * 0.6 + domainMatch * 0.4) * 100)
+    const scoreBreakdown = computeMatchScore(fingerprint, {
+      domain: (job as any).domain ?? [],
+      skills: (job as any).skills ?? [],
+      min_experience: (job as any).min_experience ?? 0,
+    })
+    const matchScore = scoreBreakdown.total
 
     // Insert application
     const { data: application, error: appErr } = await supabase
@@ -170,8 +179,17 @@ export async function POST(req: NextRequest) {
           company_id,
           pipeline_stage: 'sourced',
           match_score: matchScore,
+          score_breakdown: scoreBreakdown,
+          scored_at: new Date().toISOString(),
           tags: ['direct-apply'],
         }, { onConflict: 'candidate_id,job_id' })
+
+      // Keep imported_candidates.status in sync so this candidate shows as
+      // already scored in the recruiter's candidate pool, not stuck at 'new'.
+      await supabase
+        .from('imported_candidates')
+        .update({ match_score: matchScore, status: 'scored' })
+        .eq('id', importedCandidateId)
     }
 
     return NextResponse.json({ application_id: application.id, match_score: matchScore })

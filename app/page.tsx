@@ -221,18 +221,15 @@ export default function LandingPage() {
             For job seekers
           </p>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.75rem, 3vw, 2.5rem)', fontWeight: 700, marginBottom: '1rem', lineHeight: 1.2 }}>
-            Find your next role. No account needed.
+            Find your next role. One profile, every application scored.
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.55)', marginBottom: '2.5rem', fontSize: '1.0625rem', lineHeight: 1.7 }}>
-            Browse all jobs for free. No login, no resume upload, no profile creation. Apply directly to companies.
+            Browse all jobs for free — no login needed to look. Create a free profile once (~2 minutes: resume upload, no forms) and apply to any company on Pulse — every application is matched against the role automatically.
           </p>
           <Link href="/jobs"
             style={{ background: 'var(--accent)', color: '#fff', textDecoration: 'none', padding: '12px 28px', borderRadius: '10px', fontWeight: 700, fontFamily: 'var(--font-display)', display: 'inline-block', marginBottom: '2rem' }}>
             Browse all jobs
           </Link>
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.875rem' }}>
-            Coming in V2: AI-powered job matching via MCP
-          </p>
         </div>
       </section>
 
