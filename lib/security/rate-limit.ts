@@ -121,6 +121,10 @@ export const LIMITS = {
   /** Send-chat trigger: 5 / hour / company (Resend quota protection) */
   sendChat: (companyId: string) =>
     rateLimit(companyId, { windowMs: 60 * 60_000, max: 5, keyPrefix: 'send-chat' }),
+
+  /** LLM-export consent request: 10 / hour / company (Resend quota protection) */
+  requestConsent: (companyId: string) =>
+    rateLimit(companyId, { windowMs: 60 * 60_000, max: 10, keyPrefix: 'consent-request' }),
 } as const
 
 /** Build a 429 Response with standard rate-limit headers */

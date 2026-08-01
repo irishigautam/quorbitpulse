@@ -340,6 +340,116 @@ function ChatPanel({
   )
 }
 
+// ── LLM Export Consent Panel — Gate 1 ──────────────────────────────────────
+// Analysing a candidate's ChatGPT/Claude export requires their explicit,
+// per-request opt-in. This panel requests it (or shows current status);
+// the upload flow only ever opens once llm_consent_status === 'approved'.
+function LlmConsentPanel({
+  candidate,
+  onClose,
+  onRequested,
+}: {
+  candidate: ImportedCandidate
+  onClose: () => void
+  onRequested: (expiresAt: string) => void
+}) {
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function handleRequest() {
+    setStatus('sending')
+    setErrorMsg('')
+    try {
+      const res = await fetch(`/api/candidates/${candidate.id}/request-llm-consent`, {
+        method: 'POST',
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setStatus('error')
+        setErrorMsg(json.error ?? 'Failed to send request')
+        return
+      }
+      setStatus('sent')
+      onRequested(json.expires_at)
+    } catch {
+      setStatus('error')
+      setErrorMsg('Network error')
+    }
+  }
+
+  const current = candidate.llm_consent_status
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="font-semibold">🔒 LLM export permission — {candidate.full_name}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+              Candidate consent is required before their chat history can be analysed
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+        </div>
+
+        {current === 'pending' && status === 'idle' ? (
+          <div className="rounded-xl p-4 mb-4" style={{ background: '#FFFBEB', color: '#92400E' }}>
+            <p className="text-sm font-medium">⏳ Waiting on candidate</p>
+            <p className="text-xs mt-1">
+              A request was already sent{candidate.llm_consent_requested_at ? ` on ${new Date(candidate.llm_consent_requested_at).toLocaleDateString()}` : ''}.
+              You can send a new one — it replaces the previous link.
+            </p>
+          </div>
+        ) : current === 'denied' && status === 'idle' ? (
+          <div className="rounded-xl p-4 mb-4" style={{ background: '#FEF2F2', color: '#991B1B' }}>
+            <p className="text-sm font-medium">🚫 Candidate declined</p>
+            <p className="text-xs mt-1">
+              They can change their mind later, or you can send a new request.
+            </p>
+          </div>
+        ) : null}
+
+        {status === 'sent' ? (
+          <div className="rounded-xl p-4 mb-4" style={{ background: '#F0FDF4', color: '#14532D' }}>
+            <p className="text-sm font-medium">✓ Request sent</p>
+            <p className="text-xs mt-1">
+              {candidate.full_name} will get an email with a link to approve or decline. The upload
+              option unlocks once they approve.
+            </p>
+          </div>
+        ) : (
+          <>
+            {!candidate.email && (
+              <p className="text-xs text-red-600 mb-3">
+                This candidate has no email on file — add one before requesting consent.
+              </p>
+            )}
+            {errorMsg && <p className="text-sm text-red-600 mb-3">{errorMsg}</p>}
+            <div className="flex gap-2">
+              <button onClick={handleRequest} disabled={!candidate.email || status === 'sending'}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+                style={{ background: '#7C3AED' }}>
+                {status === 'sending' ? 'Sending…' : current === 'none' ? 'Request permission' : 'Send new request'}
+              </button>
+              <button onClick={onClose}
+                className="px-4 py-2.5 rounded-xl border text-sm font-medium hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+
+        {status === 'sent' && (
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-xl border text-sm font-medium hover:bg-gray-50">
+            Close
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── LLM Export Upload Panel — lc8 ──────────────────────────────────────────
 function LlmUploadPanel({
   candidate,
@@ -543,6 +653,7 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [breakdown, setBreakdown] = useState<ScoreBreakdown | null>(null)
   const [chatCandidate, setChatCandidate] = useState<ImportedCandidate | null>(null)
   const [llmUploadCandidate, setLlmUploadCandidate] = useState<ImportedCandidate | null>(null)
+  const [llmConsentCandidate, setLlmConsentCandidate] = useState<ImportedCandidate | null>(null)
   const [blendingStatus, setBlendingStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [blendProgress, setBlendProgress] = useState('')
   const [batchChatJob, setBatchChatJob] = useState('')
@@ -776,6 +887,21 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
               ))
             })
             setLlmUploadCandidate(null)
+          }}
+        />
+      )}
+      {llmConsentCandidate && (
+        <LlmConsentPanel
+          candidate={llmConsentCandidate}
+          onClose={() => setLlmConsentCandidate(null)}
+          onRequested={(expiresAt) => {
+            startTransition(() => {
+              setCandidates(prev => prev.map(c =>
+                c.id === llmConsentCandidate.id
+                  ? { ...c, llm_consent_status: 'pending' as const, llm_consent_requested_at: new Date().toISOString(), llm_consent_expires_at: expiresAt }
+                  : c
+              ))
+            })
           }}
         />
       )}
@@ -1023,11 +1149,21 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
                           style={{ color: '#7C3AED', borderColor: '#7C3AED' }}>
                           💬 Chat
                         </button>
-                        <button onClick={() => setLlmUploadCandidate(c)}
+                        <button
+                          onClick={() => c.llm_consent_status === 'approved' ? setLlmUploadCandidate(c) : setLlmConsentCandidate(c)}
                           className="text-xs px-2.5 py-1.5 border rounded-lg hover:bg-purple-50 font-medium"
                           style={{ color: '#7C3AED', borderColor: '#7C3AED' }}
-                          title={c.llm_export_processed_at ? `LLM history uploaded ${new Date(c.llm_export_processed_at).toLocaleDateString()}` : 'Upload LLM chat history'}>
-                          {c.llm_export_processed_at ? '📂✓' : '📂'}
+                          title={
+                            c.llm_export_processed_at ? `LLM history uploaded ${new Date(c.llm_export_processed_at).toLocaleDateString()}`
+                            : c.llm_consent_status === 'approved' ? 'Candidate approved — upload LLM chat history'
+                            : c.llm_consent_status === 'pending' ? 'Waiting on candidate approval'
+                            : c.llm_consent_status === 'denied' ? 'Candidate declined'
+                            : 'Request candidate permission for LLM chat history'
+                          }>
+                          {c.llm_export_processed_at ? '📂✓'
+                            : c.llm_consent_status === 'pending' ? '📂⏳'
+                            : c.llm_consent_status === 'denied' ? '📂✕'
+                            : '📂'}
                         </button>
                       </div>
                     </td>

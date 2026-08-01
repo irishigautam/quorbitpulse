@@ -31,12 +31,12 @@ export const maxDuration = 60  // Haiku calls can take time
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { company, companyId } = await requireCompany()
     const supabase = createServiceClient()
-    const candidateId = params.id
+    const { id: candidateId } = await params
 
     // Rate limit: 3 LLM exports per hour per company (each triggers multiple Haiku calls)
     const rl = rateLimit(companyId, { windowMs: 60 * 60_000, max: 3, keyPrefix: 'llm-export' })
@@ -59,13 +59,29 @@ export async function POST(
     // Verify candidate belongs to company
     const { data: candidate, error: candErr } = await supabase
       .from('imported_candidates')
-      .select('id, full_name, skills, domain, years_experience')
+      .select('id, full_name, skills, domain, years_experience, llm_consent_status')
       .eq('id', candidateId)
       .eq('company_id', company.id)
       .single()
 
     if (candErr || !candidate) {
       return NextResponse.json({ error: 'Candidate not found' }, { status: 404 })
+    }
+
+    // Gate 1 — candidate must have explicitly approved this analysis first.
+    // (Server-side check regardless of what the client believes the status is.)
+    if (candidate.llm_consent_status !== 'approved') {
+      return NextResponse.json(
+        {
+          error: candidate.llm_consent_status === 'pending'
+            ? 'Waiting on the candidate to approve this request.'
+            : candidate.llm_consent_status === 'denied'
+            ? 'This candidate declined this analysis.'
+            : 'You need candidate consent before analysing their chat history. Request it first.',
+          consent_status: candidate.llm_consent_status ?? 'none',
+        },
+        { status: 403 },
+      )
     }
 
     // Parse request — support both JSON body and form upload

@@ -123,6 +123,11 @@ export interface ImportedCandidate {
   llm_export_processed_at: string | null
   llm_export_summary: string | null
   llm_export_source: 'chatgpt' | 'claude' | null
+  // Candidate consent for LLM export analysis — Gate 1
+  llm_consent_status: 'none' | 'pending' | 'approved' | 'denied'
+  llm_consent_requested_at: string | null
+  llm_consent_responded_at: string | null
+  llm_consent_expires_at: string | null
   fingerprinted_at: string | null
   scored_at: string | null
   status: CandidateStatus
