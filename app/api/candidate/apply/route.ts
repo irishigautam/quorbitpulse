@@ -9,16 +9,38 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCandidate } from '@/lib/candidate-auth'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logEvent } from '@/lib/analytics/log-event'
+import type { CandidateProfile } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const { candidate } = await requireCandidate()
+    // Deliberately NOT using requireCandidate() here — it calls redirect(),
+    // which only becomes a real HTTP redirect for Server Components/Actions.
+    // Inside a Route Handler wrapped in try/catch, the thrown NEXT_REDIRECT
+    // signal gets caught below and returned as a literal "NEXT_REDIRECT"
+    // error string in the JSON body (confirmed live: the public job page
+    // showed "NEXT_REDIRECT" as visible text instead of prompting sign-in).
+    // A plain 401 lets the client redirect the browser itself instead.
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
+    }
+
     const supabase = createServiceClient()
+    const { data: candidateRow } = await supabase
+      .from('candidate_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!candidateRow) {
+      return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
+    }
+    const candidate = candidateRow as CandidateProfile
 
     const { job_id, company_id: bodyCompanyId } = await req.json()
 

@@ -7,11 +7,13 @@ import { useRouter } from 'next/navigation'
  * In-platform apply. Candidates apply on Pulse (not by clicking out to an
  * external URL/email) so every application is backed by a real
  * candidate_profiles row — that's the only way AI scoring has anything to
- * score. requireCandidate() on /api/candidate/apply redirects to
- * /candidate/login if the visitor isn't signed in as a candidate; a fetch()
- * follows that redirect silently and gets back the login page's HTML
- * instead of JSON, so we detect that case via content-type and send the
- * browser there directly (with a redirectTo back to this job).
+ * score. /api/candidate/apply returns a plain 401 { error: 'not_authenticated' }
+ * for a signed-out visitor (it deliberately avoids calling redirect() inside
+ * the route handler — that only produces a real HTTP redirect from Server
+ * Components/Actions; from a Route Handler it was getting caught and
+ * returned as literal "NEXT_REDIRECT" text, which is what showed up on the
+ * live page instead of a sign-in prompt). We detect that 401 here and send
+ * the browser to login/signup ourselves, with a redirectTo back to this job.
  */
 export default function ApplyButton({ jobId, jobSlug }: { jobId: string; jobSlug: string }) {
   const router = useRouter()
@@ -27,19 +29,9 @@ export default function ApplyButton({ jobId, jobSlug }: { jobId: string; jobSlug
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: jobId }),
-        redirect: 'manual',
       })
 
-      // requireCandidate() redirects unauthenticated visitors to
-      // /candidate/login — with redirect: 'manual' that comes back as an
-      // opaqueredirect/0 response instead of JSON.
-      if (res.type === 'opaqueredirect' || res.status === 0) {
-        router.push(`/candidate/login?redirectTo=${encodeURIComponent(`/jobs/${jobSlug}`)}`)
-        return
-      }
-
-      const contentType = res.headers.get('content-type') ?? ''
-      if (!contentType.includes('application/json')) {
+      if (res.status === 401) {
         router.push(`/candidate/login?redirectTo=${encodeURIComponent(`/jobs/${jobSlug}`)}`)
         return
       }
