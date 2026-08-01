@@ -53,5 +53,8 @@ export async function fireHrmsWebhook(payload: WebhookPayload) {
       .map(b => b.toString(16).padStart(2, '0')).join('')
   }
 
-  await fetch(company.hrms_webhook_url, { method: 'POST', headers, body })
+  const res = await fetch(company.hrms_webhook_url, { method: 'POST', headers, body })
+  if (!res.ok) {
+    throw new Error(`HRMS webhook returned ${res.status} ${res.statusText}`)
+  }
 }

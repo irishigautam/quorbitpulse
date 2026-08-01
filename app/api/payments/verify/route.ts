@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWelcomeEmail } from '@/lib/emails'
 import { logAudit } from '@/lib/audit/log'
+import { notifyAttempt } from '@/lib/notifications/log'
 import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
@@ -52,7 +53,14 @@ export async function POST(req: NextRequest) {
   // previously .catch(console.error) with no guarantee of completing).
   after(async () => {
     await Promise.allSettled([
-      sendWelcomeEmail(company),
+      notifyAttempt({
+        channel: 'email',
+        template: 'welcome',
+        companyId: company.id,
+        recipient: company.careers_email,
+        metadata: { source: 'payments/verify' },
+        send: () => sendWelcomeEmail(company),
+      }),
       logAudit({
         companyId: company.id,
         actorId: user.id,

@@ -13,6 +13,7 @@ import { sendWelcomeEmail } from '@/lib/emails'
 import { PLAN_JOBS_QUOTA } from '@/lib/razorpay'
 import { rateLimit } from '@/lib/security/rate-limit'
 import { logAudit } from '@/lib/audit/log'
+import { notifyAttempt } from '@/lib/notifications/log'
 
 function getValidCoupons(): Set<string> {
   const raw = process.env.COUPON_CODES ?? ''
@@ -67,7 +68,14 @@ export async function POST(req: NextRequest) {
 
   after(async () => {
     await Promise.allSettled([
-      sendWelcomeEmail(company),
+      notifyAttempt({
+        channel: 'email',
+        template: 'welcome',
+        companyId: company.id,
+        recipient: company.careers_email,
+        metadata: { source: 'coupon' },
+        send: () => sendWelcomeEmail(company),
+      }),
       logAudit({
         companyId: company.id,
         actorId: user.id,

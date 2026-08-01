@@ -87,6 +87,21 @@ export default async function AdminPage() {
     .order('created_at', { ascending: false })
     .limit(100)
 
+  // P0-017 — recent failed notifications (email/webhook)
+  const { data: failedNotifications } = await supabase
+    .from('notification_log')
+    .select('id, channel, template, company_id, recipient, error, created_at')
+    .eq('status', 'error')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  // P0-022 — recent server errors (self-hosted monitoring baseline)
+  const { data: errorRows } = await supabase
+    .from('error_log')
+    .select('id, route, message, created_at')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
   const companyNameById: Record<string, string> = {}
   for (const c of companies ?? []) companyNameById[c.id] = c.name
 
@@ -168,6 +183,77 @@ export default async function AdminPage() {
                   </td>
                   <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {JSON.stringify(a.metadata ?? {})}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Failed notifications — P0-017 */}
+      <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '10px', padding: '1.25rem', marginBottom: '2rem' }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.25rem' }}>Failed notifications — most recent 50</div>
+        <p style={{ fontSize: '0.78rem', color: '#6B7280', marginBottom: '1rem' }}>
+          Emails and HRMS webhooks that failed to send. Previously these were silently swallowed by Promise.allSettled().
+        </p>
+        <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+            <thead>
+              <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', position: 'sticky', top: 0 }}>
+                {['When', 'Channel', 'Template', 'Company', 'Recipient', 'Error'].map(h => (
+                  <th key={h} style={{ padding: '0.5rem 0.6rem', textAlign: 'left', fontWeight: 600, color: '#374151' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(failedNotifications ?? []).length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: '1rem', color: '#9CA3AF', textAlign: 'center' }}>No failures recorded</td></tr>
+              ) : (failedNotifications ?? []).map((n, i) => (
+                <tr key={n.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                    {new Date(n.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td style={{ padding: '0.45rem 0.6rem' }}>{n.channel}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', fontWeight: 600 }}>{n.template}</td>
+                  <td style={{ padding: '0.45rem 0.6rem' }}>{n.company_id ? (companyNameById[n.company_id] ?? n.company_id.slice(0, 8)) : '—'}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280' }}>{n.recipient ?? '—'}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#991B1B', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {n.error ?? '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Error log — P0-022, self-hosted monitoring baseline */}
+      <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '10px', padding: '1.25rem', marginBottom: '2rem' }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.25rem' }}>Error log — most recent 50</div>
+        <p style={{ fontSize: '0.78rem', color: '#6B7280', marginBottom: '1rem' }}>
+          Unhandled request errors captured via instrumentation.ts (onRequestError) plus explicit logError() calls.
+        </p>
+        <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+            <thead>
+              <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', position: 'sticky', top: 0 }}>
+                {['When', 'Route', 'Message'].map(h => (
+                  <th key={h} style={{ padding: '0.5rem 0.6rem', textAlign: 'left', fontWeight: 600, color: '#374151' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(errorRows ?? []).length === 0 ? (
+                <tr><td colSpan={3} style={{ padding: '1rem', color: '#9CA3AF', textAlign: 'center' }}>No errors recorded</td></tr>
+              ) : (errorRows ?? []).map((e, i) => (
+                <tr key={e.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                    {new Date(e.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td style={{ padding: '0.45rem 0.6rem', fontFamily: 'monospace', fontSize: '0.72rem' }}>{e.route ?? '—'}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#991B1B', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {e.message}
                   </td>
                 </tr>
               ))}

@@ -11,6 +11,7 @@ import { sendStageChangeEmail } from '@/lib/ats/notifications'
 import { fireHrmsWebhook } from '@/lib/ats/hrms-webhook'
 import { logEvent } from '@/lib/analytics/log-event'
 import { logAudit } from '@/lib/audit/log'
+import { notifyAttempt } from '@/lib/notifications/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -99,25 +100,39 @@ export async function PATCH(
       }
 
       if (candidate?.email && stage !== previousStage) {
-        tasks.push(sendStageChangeEmail({
-          candidateName: candidate.full_name,
-          candidateEmail: candidate.email,
-          jobTitle: job?.title ?? 'the role',
-          previousStage,
-          newStage: stage,
-          companyName: company.name,
+        tasks.push(notifyAttempt({
+          channel: 'email',
+          template: 'stage_change',
+          companyId: company.id,
+          recipient: candidate.email,
+          metadata: { assignmentId, stage, previousStage },
+          send: () => sendStageChangeEmail({
+            candidateName: candidate.full_name,
+            candidateEmail: candidate.email,
+            jobTitle: job?.title ?? 'the role',
+            previousStage,
+            newStage: stage,
+            companyName: company.name,
+          }),
         }))
       }
 
       if (stage === 'hired' || stage === 'rejected') {
-        tasks.push(fireHrmsWebhook({
+        tasks.push(notifyAttempt({
+          channel: 'webhook',
+          template: 'hrms_webhook',
           companyId: company.id,
-          event: stage === 'hired' ? 'candidate.hired' : 'candidate.rejected',
-          candidateId: candidate.id,
-          candidateName: candidate.full_name,
-          jobId: job?.id,
-          jobTitle: job?.title,
-          stage,
+          recipient: null,
+          metadata: { assignmentId, stage, candidateId: candidate.id },
+          send: () => fireHrmsWebhook({
+            companyId: company.id,
+            event: stage === 'hired' ? 'candidate.hired' : 'candidate.rejected',
+            candidateId: candidate.id,
+            candidateName: candidate.full_name,
+            jobId: job?.id,
+            jobTitle: job?.title,
+            stage,
+          }),
         }))
       }
 

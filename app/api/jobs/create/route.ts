@@ -5,6 +5,7 @@ import { sendJobPostedEmail } from '@/lib/emails'
 import { distributeJob } from '@/lib/distribution'
 import { logEvent } from '@/lib/analytics/log-event'
 import { logAudit } from '@/lib/audit/log'
+import { notifyAttempt } from '@/lib/notifications/log'
 import { createClient } from '@/lib/supabase/server'
 import { jobSlug } from '@/types'
 import type { PostJobFormValues } from '@/types'
@@ -76,7 +77,14 @@ export async function POST(req: NextRequest) {
   after(async () => {
     await Promise.allSettled([
       pingGoogleIndexing(`${appUrl}/jobs/${slug}`),
-      sendJobPostedEmail(company, job),
+      notifyAttempt({
+        channel: 'email',
+        template: 'job_posted',
+        companyId: company.id,
+        recipient: company.careers_email,
+        metadata: { jobId: job.id },
+        send: () => sendJobPostedEmail(company, job),
+      }),
       distributeJob(job, company),
       logEvent({ eventType: 'job_posted', companyId: company.id, entityId: job.id }),
       logAudit({
