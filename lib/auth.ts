@@ -24,6 +24,13 @@ export async function requireCompany(): Promise<{ userId: string; companyId: str
 
   if (!user) redirect('/onboarding/login')
 
+  // Defense-in-depth: block dashboard access for an unconfirmed email even
+  // if a session somehow exists (e.g. Supabase project settings change, or
+  // a future auth method that doesn't gate on confirmation the same way).
+  // email_confirmed_at is set automatically at signup if confirmations are
+  // disabled project-wide, so this is a no-op in that case.
+  if (!user.email_confirmed_at) redirect('/onboarding/verify-pending')
+
   // Look up membership — join to company in one query
   const { data: membership } = await supabase
     .from('company_members')

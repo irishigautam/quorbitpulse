@@ -20,6 +20,8 @@ export default function SignupPage() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pendingConfirmation, setPendingConfirmation] = useState(false)
+  const [resent, setResent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,11 +35,24 @@ export default function SignupPage() {
 
     setLoading(true)
     const supabase = createClient()
+    const website = form.website.startsWith('http') ? form.website : `https://${form.website}`
 
-    // Create auth user
+    // Create auth user. Company details go into user_metadata (not the
+    // companies table yet) — if email confirmation is required, there's no
+    // session yet and an insert would just fail RLS. /onboarding/post-confirm
+    // reads this metadata to create the company row once a session exists.
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: form.careers_email,
       password: form.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=/onboarding/post-confirm`,
+        data: {
+          user_type: 'employer',
+          company_name: form.company_name.trim(),
+          website,
+          careers_email: form.careers_email,
+        },
+      },
     })
 
     if (authError) {
@@ -50,8 +65,17 @@ export default function SignupPage() {
       return setError('Failed to create account. Please try again.')
     }
 
-    // Insert company record
-    const website = form.website.startsWith('http') ? form.website : `https://${form.website}`
+    // No session yet — Supabase requires email confirmation before sign-in.
+    // Don't attempt to create the company row (it would fail RLS with no
+    // active session); show a "check your email" screen instead.
+    if (!authData.session) {
+      setLoading(false)
+      setPendingConfirmation(true)
+      return
+    }
+
+    // Confirmations are disabled on this project — session exists
+    // immediately, proceed exactly as before.
     const { data: companyData, error: companyError } = await supabase
       .from('companies')
       .insert({
@@ -76,6 +100,43 @@ export default function SignupPage() {
     }).catch(() => {})
 
     router.push('/onboarding/payment')
+  }
+
+  const handleResend = async () => {
+    setResent(false)
+    const supabase = createClient()
+    await supabase.auth.resend({
+      type: 'signup',
+      email: form.careers_email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/confirm?next=/onboarding/post-confirm` },
+    })
+    setResent(true)
+  }
+
+  if (pendingConfirmation) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+        <div className="mb-8 text-center">
+          <a href="/" className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--navy)' }}>
+            JobPulse
+          </a>
+          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>by Quorbit</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border p-8 w-full max-w-md text-center">
+          <div className="text-4xl mb-3">📧</div>
+          <h1 className="text-xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>Check your email</h1>
+          <p className="text-sm mb-4" style={{ color: 'var(--muted)' }}>
+            We sent a confirmation link to <strong>{form.careers_email}</strong>. Click it to activate your account and continue to payment.
+          </p>
+          {resent && (
+            <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 mb-4">Confirmation email resent.</p>
+          )}
+          <button onClick={handleResend} className="text-sm underline" style={{ color: 'var(--accent)' }}>
+            Didn't get it? Resend
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
