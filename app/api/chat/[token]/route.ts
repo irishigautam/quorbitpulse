@@ -17,6 +17,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { verifyChatToken } from '@/lib/chat/token'
 import { sanitizeText, detectPromptInjection } from '@/lib/security/sanitize'
 import { LIMITS } from '@/lib/security/rate-limit'
+import { logEvent } from '@/lib/analytics/log-event'
 import Anthropic from '@anthropic-ai/sdk'
 
 export const dynamic = 'force-dynamic'
@@ -200,6 +201,13 @@ export async function POST(
         .from('imported_candidates')
         .update({ status: 'chat_complete' })
         .eq('id', payload.candidateId)
+
+      logEvent({
+        eventType: 'chat_completed',
+        companyId: payload.companyId,
+        entityId: payload.candidateId,
+        metadata: { job_id: payload.jobId, readiness_score: readinessScore },
+      })
     }
 
     return NextResponse.json({

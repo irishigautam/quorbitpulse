@@ -60,6 +60,26 @@ export default async function AdminPage() {
     candByCompany[c.company_id] = (candByCompany[c.company_id] ?? 0) + 1
   }
 
+  // Gate 4 — funnel event baseline (last 14 days, per event type per day)
+  const fourteenDaysAgo = new Date()
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+
+  const { data: funnelEvents } = await supabase
+    .from('funnel_events')
+    .select('event_type, created_at')
+    .gte('created_at', fourteenDaysAgo.toISOString())
+
+  const FUNNEL_TYPES = [
+    'company_signup', 'candidate_signup', 'job_posted', 'candidates_imported',
+    'candidate_applied', 'candidates_scored', 'chat_completed', 'pipeline_stage_changed',
+  ] as const
+
+  const funnelTotals: Record<string, number> = {}
+  for (const t of FUNNEL_TYPES) funnelTotals[t] = 0
+  for (const e of funnelEvents ?? []) {
+    funnelTotals[e.event_type] = (funnelTotals[e.event_type] ?? 0) + 1
+  }
+
   const active = (companies ?? []).filter(c => c.plan_active).length
   const annual = (companies ?? []).filter(c => c.billing_cycle === 'annual').length
   const tierBreakdown: Record<string, number> = {}
@@ -86,6 +106,24 @@ export default async function AdminPage() {
             <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{value}</div>
           </div>
         ))}
+      </div>
+
+      {/* Funnel baseline — Gate 4, last 14 days */}
+      <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '10px', padding: '1.25rem', marginBottom: '2rem' }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.25rem' }}>Funnel — last 14 days</div>
+        <p style={{ fontSize: '0.78rem', color: '#6B7280', marginBottom: '1rem' }}>
+          Employer: signup → job posted → candidates imported → scored → chat completed → pipeline stage changed. Candidate: signup → applied.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+          {FUNNEL_TYPES.map(t => (
+            <div key={t} style={{ background: '#F9FAFB', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ fontSize: '0.72rem', color: '#6B7280', textTransform: 'capitalize' }}>
+                {t.replace(/_/g, ' ')}
+              </div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{funnelTotals[t]}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Companies table */}

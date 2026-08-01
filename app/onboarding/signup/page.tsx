@@ -52,17 +52,28 @@ export default function SignupPage() {
 
     // Insert company record
     const website = form.website.startsWith('http') ? form.website : `https://${form.website}`
-    const { error: companyError } = await supabase.from('companies').insert({
-      user_id: authData.user.id,
-      name: form.company_name.trim(),
-      website,
-      careers_email: form.careers_email,
-    })
+    const { data: companyData, error: companyError } = await supabase
+      .from('companies')
+      .insert({
+        user_id: authData.user.id,
+        name: form.company_name.trim(),
+        website,
+        careers_email: form.careers_email,
+      })
+      .select('id')
+      .single()
 
     if (companyError) {
       setLoading(false)
       return setError(companyError.message)
     }
+
+    // Best-effort funnel event — never blocks navigation
+    fetch('/api/events/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: 'company_signup', companyId: companyData?.id }),
+    }).catch(() => {})
 
     router.push('/onboarding/payment')
   }

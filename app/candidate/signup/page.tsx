@@ -52,6 +52,13 @@ export default function CandidateSignupPage() {
       return
     }
 
+    // Best-effort funnel event — never blocks navigation
+    fetch('/api/events/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType: 'candidate_signup', entityId: authData.user.id }),
+    }).catch(() => {})
+
     router.push('/candidate/dashboard')
   }
 

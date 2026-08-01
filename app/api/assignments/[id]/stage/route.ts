@@ -9,6 +9,7 @@ import { requireCompany } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendStageChangeEmail } from '@/lib/ats/notifications'
 import { fireHrmsWebhook } from '@/lib/ats/hrms-webhook'
+import { logEvent } from '@/lib/analytics/log-event'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,9 +18,10 @@ type Stage = typeof VALID_STAGES[number]
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id: assignmentId } = await params
     const { company } = await requireCompany()
     const supabase = createServiceClient()
     const body = await req.json()
@@ -37,7 +39,7 @@ export async function PATCH(
         candidate:imported_candidates(id, full_name, email),
         job:jobs(id, title)
       `)
-      .eq('id', params.id)
+      .eq('id', assignmentId)
       .eq('company_id', company.id)
       .single()
 
@@ -50,10 +52,19 @@ export async function PATCH(
     const { error: updateErr } = await supabase
       .from('candidate_job_assignments')
       .update({ pipeline_stage: stage, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', assignmentId)
       .eq('company_id', company.id)
 
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+    if (stage !== previousStage) {
+      logEvent({
+        eventType: 'pipeline_stage_changed',
+        companyId: company.id,
+        entityId: assignmentId,
+        metadata: { stage, previous_stage: previousStage },
+      })
+    }
 
     // Also update candidate status if moved to hired/rejected
     if (stage === 'hired' || stage === 'rejected') {
@@ -91,7 +102,7 @@ export async function PATCH(
       }).catch(console.error)
     }
 
-    return NextResponse.json({ id: params.id, stage, previousStage })
+    return NextResponse.json({ id: assignmentId, stage, previousStage })
   } catch (err) {
     console.error('stage update error:', err)
     return NextResponse.json({ error: 'Unexpected error' }, { status: 500 })

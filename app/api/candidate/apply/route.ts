@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCandidate } from '@/lib/candidate-auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { logEvent } from '@/lib/analytics/log-event'
 
 export const dynamic = 'force-dynamic'
 
@@ -94,6 +95,13 @@ export async function POST(req: NextRequest) {
     if (appErr) {
       return NextResponse.json({ error: appErr.message }, { status: 500 })
     }
+
+    logEvent({
+      eventType: 'candidate_applied',
+      companyId: company_id,
+      entityId: application.id,
+      metadata: { candidate_id: candidate.id, job_id, match_score: matchScore },
+    })
 
     // Also create an imported_candidates + assignment entry on the recruiter side
     // so the recruiter sees this application in their pipeline

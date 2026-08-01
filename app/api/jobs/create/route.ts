@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { pingGoogleIndexing } from '@/lib/google-indexing'
 import { sendJobPostedEmail } from '@/lib/emails'
 import { distributeJob } from '@/lib/distribution'
+import { logEvent } from '@/lib/analytics/log-event'
 import { jobSlug } from '@/types'
 import type { PostJobFormValues } from '@/types'
 
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest) {
     console.error('[jobs/create]', error)
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
   }
+
+  logEvent({ eventType: 'job_posted', companyId: company.id, entityId: job.id })
 
   // Increment jobs_used
   await supabase

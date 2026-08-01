@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireCompany } from '@/lib/auth'
 import { parseCSV, normaliseCandidateRow } from '@/lib/csv-parser'
 import { LIMITS } from '@/lib/security/rate-limit'
+import { logEvent } from '@/lib/analytics/log-event'
 import type { ImportResult } from '@/types'
 
 export const runtime = 'nodejs'
@@ -154,6 +155,15 @@ export async function POST(req: NextRequest) {
       .from('import_batches')
       .update({ inserted, skipped_dups, failed, total_rows: rows.length, status: 'complete' })
       .eq('id', batch.id)
+
+    if (inserted > 0) {
+      logEvent({
+        eventType: 'candidates_imported',
+        companyId: company.id,
+        entityId: batch.id,
+        metadata: { source: 'csv', inserted, skipped_dups, failed },
+      })
+    }
 
     const result: ImportResult = {
       batch_id: batch.id,

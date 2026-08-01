@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCompany } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { logEvent } from '@/lib/analytics/log-event'
 
 export const dynamic = 'force-dynamic'
 
@@ -141,6 +142,14 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (data) { imported++; inserted.push(data) }
+    }
+
+    if (imported > 0) {
+      logEvent({
+        eventType: 'candidates_imported',
+        companyId: company.id,
+        metadata: { source: 'apollo', imported, skipped },
+      })
     }
 
     return NextResponse.json({ imported, skipped, total: people.length, candidates: inserted })

@@ -16,6 +16,7 @@ import { buildProfileText, extractFingerprint } from '@/lib/scoring/fingerprint'
 import { computeMatchScore } from '@/lib/scoring/engine'
 import { LIMITS } from '@/lib/security/rate-limit'
 import { checkLimit, recordUsage } from '@/lib/subscription'
+import { logEvent } from '@/lib/analytics/log-event'
 
 export const dynamic = 'force-dynamic'
 
@@ -174,6 +175,13 @@ export async function POST(req: NextRequest) {
         job_id,
         candidates_scored: successCount,
       }).catch(console.error)
+
+      logEvent({
+        eventType: 'candidates_scored',
+        companyId,
+        entityId: job_id,
+        metadata: { candidates_scored: successCount },
+      })
     }
 
     return NextResponse.json({
