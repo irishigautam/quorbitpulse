@@ -116,27 +116,69 @@ export default async function MyJobsPage({
                   </div>
                 </div>
 
-                {/* Distribution channel badges */}
-                {(job as any).distributed_at && (job as any).distribution_channels && (
-                  <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                    <span className="text-xs" style={{ color: 'var(--muted)' }}>Published to:</span>
-                    {Object.entries((job as any).distribution_channels as Record<string, { status: string; url?: string }>).map(
-                      ([ch, result]) => result.status === 'ok' ? (
-                        <a
-                          key={ch}
-                          href={result.url ?? '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={`View on ${ch}`}
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: '#DCFCE7', color: '#166534', textDecoration: 'none' }}
-                        >
-                          {CHANNEL_ICONS[ch]} {ch.charAt(0).toUpperCase() + ch.slice(1)}
-                        </a>
-                      ) : null
-                    )}
-                  </div>
-                )}
+                {/* Distribution channel badges — Gate 5: show failures/skips too, not just successes */}
+                {(job as any).distributed_at && (job as any).distribution_channels && (() => {
+                  const channels = (job as any).distribution_channels as Record<
+                    string, { status: string; url?: string; error?: string }
+                  >
+                  const failed = Object.values(channels).filter(r => r.status === 'error').length
+                  return (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs" style={{ color: 'var(--muted)' }}>Distribution:</span>
+                        {Object.entries(channels).map(([ch, result]) => {
+                          const label = ch.charAt(0).toUpperCase() + ch.slice(1)
+                          if (result.status === 'ok') {
+                            return (
+                              <a
+                                key={ch}
+                                href={result.url ?? '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={`View on ${ch}`}
+                                className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                style={{ background: '#DCFCE7', color: '#166534', textDecoration: 'none' }}
+                              >
+                                {CHANNEL_ICONS[ch] ?? ''} {label}
+                              </a>
+                            )
+                          }
+                          if (result.status === 'error') {
+                            return (
+                              <span
+                                key={ch}
+                                title={result.error ?? 'Distribution failed'}
+                                className="text-xs px-2 py-0.5 rounded-full font-medium cursor-help"
+                                style={{ background: '#FEE2E2', color: '#991B1B' }}
+                              >
+                                ⚠ {label} failed
+                              </span>
+                            )
+                          }
+                          // skipped (not connected) — de-emphasized, not an error
+                          return (
+                            <span
+                              key={ch}
+                              title="Not connected — see Integrations settings"
+                              className="text-xs px-2 py-0.5 rounded-full font-medium cursor-help"
+                              style={{ background: '#F3F4F6', color: '#9CA3AF' }}
+                            >
+                              {label} skipped
+                            </span>
+                          )
+                        })}
+                      </div>
+                      {failed > 0 && (
+                        <p className="text-xs mt-1.5" style={{ color: '#991B1B' }}>
+                          {failed} channel{failed !== 1 ? 's' : ''} failed to receive this posting.{' '}
+                          <Link href="/dashboard/settings/distribution" style={{ textDecoration: 'underline' }}>
+                            Check integrations →
+                          </Link>
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                   <a
