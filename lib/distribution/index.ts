@@ -52,23 +52,11 @@ function resolveManagedConfig(cfg: IntegrationConfig, platform: string): Integra
   }
 }
 
-export async function distributeJob(
+async function buildTasks(
   job: Job,
-  company: Company
-): Promise<DistributionReport> {
-  const supabase = createServiceClient()
-
-  // Load all connected integrations (owned + managed) for this company
-  const { data: configs } = await supabase
-    .from('integration_configs')
-    .select('*')
-    .eq('company_id', company.id)
-    .eq('status', 'connected')
-
-  const configMap = new Map<string, IntegrationConfig>(
-    (configs ?? []).map((c: any) => [c.platform, c as IntegrationConfig])
-  )
-
+  company: Company,
+  configMap: Map<string, IntegrationConfig>
+): Promise<Record<string, () => Promise<PostResult>>> {
   const tasks: Record<string, () => Promise<PostResult>> = {}
 
   // ── Always-on feed platforms ─────────────────────────────────────
@@ -97,7 +85,18 @@ export async function distributeJob(
   if (configMap.has('foundit'))     tasks.foundit     = () => postToFoundit(job, resolveManagedConfig(configMap.get('foundit')!, 'foundit'))
   if (configMap.has('ziprecruiter')) tasks.ziprecruiter = () => postToZipRecruiter(job, resolveManagedConfig(configMap.get('ziprecruiter')!, 'ziprecruiter'))
 
-  // Run all in parallel
+  return tasks
+}
+
+async function runTasksAndPersist(
+  job: Job,
+  company: Company,
+  configMap: Map<string, IntegrationConfig>,
+  tasks: Record<string, () => Promise<PostResult>>,
+  existingReport: DistributionReport
+): Promise<DistributionReport> {
+  const supabase = createServiceClient()
+
   const entries = Object.entries(tasks)
   const results = await Promise.all(
     entries.map(([, fn]) =>
@@ -109,9 +108,13 @@ export async function distributeJob(
     )
   )
 
-  const report: DistributionReport = Object.fromEntries(
+  const freshReport: DistributionReport = Object.fromEntries(
     entries.map(([id], i) => [id, results[i]])
   )
+
+  // Merge onto whatever was already recorded so channels not re-run (e.g. those
+  // already 'ok', or intentionally skipped during a retry) are preserved.
+  const report: DistributionReport = { ...existingReport, ...freshReport }
 
   // Persist results
   try {
@@ -143,6 +146,81 @@ export async function distributeJob(
   console.log(`[distribution] job=${job.id} ${summary}`)
 
   return report
+}
+
+export async function distributeJob(
+  job: Job,
+  company: Company
+): Promise<DistributionReport> {
+  const supabase = createServiceClient()
+
+  // Load all connected integrations (owned + managed) for this company
+  const { data: configs } = await supabase
+    .from('integration_configs')
+    .select('*')
+    .eq('company_id', company.id)
+    .eq('status', 'connected')
+
+  const configMap = new Map<string, IntegrationConfig>(
+    (configs ?? []).map((c: any) => [c.platform, c as IntegrationConfig])
+  )
+
+  const tasks = await buildTasks(job, company, configMap)
+  return runTasksAndPersist(job, company, configMap, tasks, {})
+}
+
+/**
+ * P0-007 — Retry ONLY the channels that previously errored, leaving every
+ * channel that already succeeded untouched. Re-running the full distributeJob
+ * would risk duplicate postings on external boards that don't dedupe on their
+ * end (e.g. re-submitting to LinkedIn/Naukri could create a second listing),
+ * so this only re-invokes tasks for channels currently in 'error' status.
+ */
+export async function retryFailedChannels(
+  job: Job,
+  company: Company
+): Promise<{ report: DistributionReport; retried: string[] }> {
+  const supabase = createServiceClient()
+
+  const { data: jobRow } = await supabase
+    .from('jobs')
+    .select('distribution_channels')
+    .eq('id', job.id)
+    .single()
+
+  const existingReport: DistributionReport = (jobRow?.distribution_channels as DistributionReport) ?? {}
+
+  const failedChannels = Object.entries(existingReport)
+    .filter(([, r]) => r.status === 'error')
+    .map(([id]) => id)
+
+  if (failedChannels.length === 0) {
+    return { report: existingReport, retried: [] }
+  }
+
+  const { data: configs } = await supabase
+    .from('integration_configs')
+    .select('*')
+    .eq('company_id', company.id)
+    .eq('status', 'connected')
+
+  const configMap = new Map<string, IntegrationConfig>(
+    (configs ?? []).map((c: any) => [c.platform, c as IntegrationConfig])
+  )
+
+  const allTasks = await buildTasks(job, company, configMap)
+  const retryTasks: Record<string, () => Promise<PostResult>> = {}
+  for (const ch of failedChannels) {
+    if (allTasks[ch]) retryTasks[ch] = allTasks[ch]
+  }
+
+  const retried = Object.keys(retryTasks)
+  if (retried.length === 0) {
+    return { report: existingReport, retried: [] }
+  }
+
+  const report = await runTasksAndPersist(job, company, configMap, retryTasks, existingReport)
+  return { report, retried }
 }
 
 export function successCount(report: DistributionReport): number {

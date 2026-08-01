@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { Job } from '@/types'
 import { jobSlug } from '@/types'
 import JobActionsClient from './JobActionsClient'
+import RetryDistributionButton from './RetryDistributionButton'
 
 const CHANNEL_ICONS: Record<string, string> = {
   indeed: '🔵',
@@ -169,11 +170,14 @@ export default async function MyJobsPage({
                         })}
                       </div>
                       {failed > 0 && (
-                        <p className="text-xs mt-1.5" style={{ color: '#991B1B' }}>
-                          {failed} channel{failed !== 1 ? 's' : ''} failed to receive this posting.{' '}
-                          <Link href="/dashboard/settings/distribution" style={{ textDecoration: 'underline' }}>
-                            Check integrations →
-                          </Link>
+                        <p className="text-xs mt-1.5 flex items-center gap-2 flex-wrap" style={{ color: '#991B1B' }}>
+                          <span>
+                            {failed} channel{failed !== 1 ? 's' : ''} failed to receive this posting.{' '}
+                            <Link href="/dashboard/integrations" style={{ textDecoration: 'underline' }}>
+                              Check integrations →
+                            </Link>
+                          </span>
+                          <RetryDistributionButton jobId={job.id} failedCount={failed} />
                         </p>
                       )}
                     </div>

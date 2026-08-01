@@ -3,9 +3,10 @@
  * DELETE /api/team/members — remove a member (admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,7 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { companyId, userId: requesterId } = await requireRole('admin')
+  const { companyId, userId: requesterId, role: requesterRole } = await requireRole('admin')
   const { user_id } = await req.json()
 
   if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 })
@@ -43,6 +44,15 @@ export async function DELETE(req: NextRequest) {
     .delete()
     .eq('company_id', companyId)
     .eq('user_id', user_id)
+
+  after(() => logAudit({
+    companyId,
+    actorId: requesterId,
+    actorRole: requesterRole,
+    action: 'member.remove',
+    targetType: 'member',
+    targetId: user_id,
+  }))
 
   return NextResponse.json({ ok: true })
 }

@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { verifyWebhookSignature, PLAN_JOBS_QUOTA } from '@/lib/razorpay'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendWelcomeEmail } from '@/lib/emails'
+import { logAudit } from '@/lib/audit/log'
 import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
@@ -46,8 +47,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to activate plan' }, { status: 500 })
   }
 
-  // Send welcome email (non-blocking)
-  sendWelcomeEmail(company).catch(console.error)
+  // Post-response side effects, guaranteed to finish via after() (same
+  // fire-and-forget reliability fix as jobs/create/route.ts — this was
+  // previously .catch(console.error) with no guarantee of completing).
+  after(async () => {
+    await Promise.allSettled([
+      sendWelcomeEmail(company),
+      logAudit({
+        companyId: company.id,
+        actorId: user.id,
+        actorRole: 'system',
+        action: 'billing.plan_change',
+        targetType: 'company',
+        targetId: company.id,
+        metadata: { razorpay_payment_id, source: 'payments/verify' },
+      }),
+    ])
+  })
 
   return NextResponse.json({ success: true })
 }

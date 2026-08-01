@@ -15,6 +15,52 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
   const [urlSaved, setUrlSaved] = useState(!!candidate.linkedin_url)
   const [urlError, setUrlError] = useState('')
 
+  // P0-010 / P0-011 — profile was entirely read-only beyond resume re-upload
+  // and the LinkedIn URL field. This lets a candidate correct a bad AI parse
+  // or edit their basic identity fields.
+  const [editing, setEditing] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profileError, setProfileError] = useState('')
+  const [editForm, setEditForm] = useState({
+    full_name: candidate.full_name ?? '',
+    location: candidate.location ?? '',
+    current_title: candidate.current_title ?? '',
+    current_company: candidate.current_company ?? '',
+    skills: (candidate.skills ?? []).join(', '),
+    domain: (candidate.domain ?? []).join(', '),
+    seniority: candidate.seniority ?? '',
+    years_experience: candidate.years_experience?.toString() ?? '',
+  })
+
+  async function handleSaveProfile() {
+    setSavingProfile(true)
+    setProfileError('')
+
+    const res = await fetch('/api/candidate/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: editForm.full_name,
+        location: editForm.location,
+        current_title: editForm.current_title,
+        current_company: editForm.current_company,
+        skills: editForm.skills.split(',').map(s => s.trim()).filter(Boolean),
+        domain: editForm.domain.split(',').map(d => d.trim()).filter(Boolean),
+        seniority: editForm.seniority || null,
+        years_experience: editForm.years_experience === '' ? null : Number(editForm.years_experience),
+      }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      setProfileError(data.error ?? 'Failed to save')
+    } else {
+      setEditing(false)
+      router.refresh()
+    }
+    setSavingProfile(false)
+  }
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -72,10 +118,98 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
       position: 'sticky',
       top: '1rem',
     }}>
-      <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem' }}>
-        Resume & Profile
-      </h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0 }}>
+          Resume & Profile
+        </h3>
+        <button
+          onClick={() => setEditing(e => !e)}
+          style={{
+            fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)',
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+          }}
+        >
+          {editing ? 'Cancel' : '✎ Edit'}
+        </button>
+      </div>
 
+      {editing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1rem' }}>
+          {([
+            ['full_name', 'Full name', 'text'],
+            ['location', 'Location', 'text'],
+            ['current_title', 'Current title', 'text'],
+            ['current_company', 'Current company', 'text'],
+          ] as const).map(([key, label]) => (
+            <div key={key}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>{label}</div>
+              <input
+                value={(editForm as any)[key]}
+                onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
+              />
+            </div>
+          ))}
+
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>Skills (comma-separated)</div>
+            <input
+              value={editForm.skills}
+              onChange={e => setEditForm(f => ({ ...f, skills: e.target.value }))}
+              placeholder="React, Python, SQL"
+              style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>Domain (comma-separated)</div>
+            <input
+              value={editForm.domain}
+              onChange={e => setEditForm(f => ({ ...f, domain: e.target.value }))}
+              placeholder="Fintech, Healthcare"
+              style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>Level</div>
+              <select
+                value={editForm.seniority}
+                onChange={e => setEditForm(f => ({ ...f, seniority: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px' }}
+              >
+                <option value="">—</option>
+                {['intern', 'junior', 'mid', 'senior', 'lead', 'principal'].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>Years experience</div>
+              <input
+                type="number" min={0} max={60}
+                value={editForm.years_experience}
+                onChange={e => setEditForm(f => ({ ...f, years_experience: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+
+          {profileError && <p style={{ color: '#EF4444', fontSize: '0.78rem' }}>{profileError}</p>}
+
+          <button
+            onClick={handleSaveProfile}
+            disabled={savingProfile}
+            style={{
+              fontSize: '0.82rem', fontWeight: 600, padding: '7px', borderRadius: '6px',
+              background: 'var(--primary)', color: '#fff', border: 'none',
+              cursor: savingProfile ? 'not-allowed' : 'pointer', opacity: savingProfile ? 0.7 : 1,
+            }}
+          >
+            {savingProfile ? 'Saving…' : 'Save profile'}
+          </button>
+        </div>
+      ) : (
+      <>
       {/* Skills chips */}
       {candidate.skills?.length > 0 && (
         <div style={{ marginBottom: '0.75rem' }}>
@@ -124,6 +258,12 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
         </div>
       )}
 
+      {(candidate.current_title || candidate.current_company || candidate.location) && (
+        <div style={{ marginBottom: '0.75rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
+          {[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}
+        </div>
+      )}
+
       {/* Projects / Certs badge row */}
       {(candidate.projects?.length > 0 || candidate.certifications?.length > 0) && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
@@ -149,6 +289,8 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
         <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.75rem', lineHeight: 1.5 }}>
           {candidate.fingerprint_summary}
         </p>
+      )}
+      </>
       )}
 
       {/* ── Resume upload ── */}

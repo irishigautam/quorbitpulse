@@ -7,11 +7,12 @@
  * Also rate-limited: 5 attempts per user per hour to prevent brute-force.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWelcomeEmail } from '@/lib/emails'
 import { PLAN_JOBS_QUOTA } from '@/lib/razorpay'
 import { rateLimit } from '@/lib/security/rate-limit'
+import { logAudit } from '@/lib/audit/log'
 
 function getValidCoupons(): Set<string> {
   const raw = process.env.COUPON_CODES ?? ''
@@ -64,6 +65,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to activate plan' }, { status: 500 })
   }
 
-  sendWelcomeEmail(company).catch(console.error)
+  after(async () => {
+    await Promise.allSettled([
+      sendWelcomeEmail(company),
+      logAudit({
+        companyId: company.id,
+        actorId: user.id,
+        actorRole: 'system',
+        action: 'billing.plan_change',
+        targetType: 'company',
+        targetId: company.id,
+        metadata: { source: 'coupon' },
+      }),
+    ])
+  })
   return NextResponse.json({ success: true })
 }

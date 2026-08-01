@@ -3,9 +3,10 @@
  * DELETE /api/team/invite — revoke a pending invite
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit/log'
 import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,7 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 export async function POST(req: NextRequest) {
-  const { companyId, company } = await requireRole('admin')
+  const { companyId, company, userId, role: requesterRole } = await requireRole('admin')
   const { email, role } = await req.json()
 
   if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 })
@@ -67,11 +68,20 @@ export async function POST(req: NextRequest) {
     `,
   })
 
+  after(() => logAudit({
+    companyId,
+    actorId: userId,
+    actorRole: requesterRole,
+    action: 'member.invite',
+    targetType: 'invite',
+    metadata: { email, role: role ?? 'recruiter' },
+  }))
+
   return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(req: NextRequest) {
-  const { companyId } = await requireRole('admin')
+  const { companyId, userId, role: requesterRole } = await requireRole('admin')
   const { invite_id } = await req.json()
 
   if (!invite_id) return NextResponse.json({ error: 'invite_id required' }, { status: 400 })
@@ -82,6 +92,15 @@ export async function DELETE(req: NextRequest) {
     .delete()
     .eq('id', invite_id)
     .eq('company_id', companyId)
+
+  after(() => logAudit({
+    companyId,
+    actorId: userId,
+    actorRole: requesterRole,
+    action: 'member.invite_revoke',
+    targetType: 'invite',
+    targetId: invite_id,
+  }))
 
   return NextResponse.json({ ok: true })
 }

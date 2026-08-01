@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireCompany } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { parseCSV, normaliseCandidateRow } from '@/lib/csv-parser'
 import { LIMITS } from '@/lib/security/rate-limit'
 import { logEvent } from '@/lib/analytics/log-event'
+import { logAudit } from '@/lib/audit/log'
 import type { ImportResult } from '@/types'
 
 export const runtime = 'nodejs'
@@ -11,7 +12,8 @@ export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
-    const { company } = await requireCompany()
+    // P0-018: importing candidates is a material action — require recruiter+
+    const { userId, role, company } = await requireRole('recruiter')
 
     // Rate limit: 20 imports / hour / company
     const rl = LIMITS.candidateImport(company.id)
@@ -161,6 +163,15 @@ export async function POST(req: NextRequest) {
         eventType: 'candidates_imported',
         companyId: company.id,
         entityId: batch.id,
+        metadata: { source: 'csv', inserted, skipped_dups, failed },
+      })
+      await logAudit({
+        companyId: company.id,
+        actorId: userId,
+        actorRole: role,
+        action: 'candidate.import',
+        targetType: 'import_batch',
+        targetId: batch.id,
         metadata: { source: 'csv', inserted, skipped_dups, failed },
       })
     }

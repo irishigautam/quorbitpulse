@@ -80,6 +80,16 @@ export default async function AdminPage() {
     funnelTotals[e.event_type] = (funnelTotals[e.event_type] ?? 0) + 1
   }
 
+  // P0-020 — audit log (most recent 100 entries, joined to company name)
+  const { data: auditRows } = await supabase
+    .from('audit_log')
+    .select('id, company_id, actor_id, actor_role, action, target_type, target_id, metadata, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  const companyNameById: Record<string, string> = {}
+  for (const c of companies ?? []) companyNameById[c.id] = c.name
+
   const active = (companies ?? []).filter(c => c.plan_active).length
   const annual = (companies ?? []).filter(c => c.billing_cycle === 'annual').length
   const tierBreakdown: Record<string, number> = {}
@@ -123,6 +133,46 @@ export default async function AdminPage() {
               <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{funnelTotals[t]}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Audit log — P0-020, most recent 100 entries */}
+      <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '10px', padding: '1.25rem', marginBottom: '2rem' }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.25rem' }}>Audit log — most recent 100</div>
+        <p style={{ fontSize: '0.78rem', color: '#6B7280', marginBottom: '1rem' }}>
+          Who did what, to what, when — job, member, candidate, pipeline, and billing actions.
+        </p>
+        <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+            <thead>
+              <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', position: 'sticky', top: 0 }}>
+                {['When', 'Company', 'Actor', 'Role', 'Action', 'Target', 'Metadata'].map(h => (
+                  <th key={h} style={{ padding: '0.5rem 0.6rem', textAlign: 'left', fontWeight: 600, color: '#374151' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(auditRows ?? []).length === 0 ? (
+                <tr><td colSpan={7} style={{ padding: '1rem', color: '#9CA3AF', textAlign: 'center' }}>No audit events yet</td></tr>
+              ) : (auditRows ?? []).map((a, i) => (
+                <tr key={a.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                    {new Date(a.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td style={{ padding: '0.45rem 0.6rem' }}>{a.company_id ? (companyNameById[a.company_id] ?? a.company_id.slice(0, 8)) : '—'}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', fontFamily: 'monospace', fontSize: '0.72rem' }}>{a.actor_id ? a.actor_id.slice(0, 8) : 'system'}</td>
+                  <td style={{ padding: '0.45rem 0.6rem' }}>{a.actor_role ?? '—'}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', fontWeight: 600 }}>{a.action}</td>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280' }}>
+                    {a.target_type ?? '—'}{a.target_id ? ` · ${a.target_id.slice(0, 8)}` : ''}
+                  </td>
+                  <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {JSON.stringify(a.metadata ?? {})}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

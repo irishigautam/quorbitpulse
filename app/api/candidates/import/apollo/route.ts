@@ -21,9 +21,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCompany } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { logEvent } from '@/lib/analytics/log-event'
+import { logAudit } from '@/lib/audit/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +63,7 @@ function yearsExp(p: ApolloPersonResult): number | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const { company } = await requireCompany()
+    const { userId, role, company } = await requireRole('recruiter')
     const supabase = createServiceClient()
 
     const body = await req.json()
@@ -148,6 +149,14 @@ export async function POST(req: NextRequest) {
       await logEvent({
         eventType: 'candidates_imported',
         companyId: company.id,
+        metadata: { source: 'apollo', imported, skipped },
+      })
+      await logAudit({
+        companyId: company.id,
+        actorId: userId,
+        actorRole: role,
+        action: 'candidate.import',
+        targetType: 'import_batch',
         metadata: { source: 'apollo', imported, skipped },
       })
     }

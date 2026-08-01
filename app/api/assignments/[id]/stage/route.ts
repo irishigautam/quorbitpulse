@@ -5,11 +5,12 @@
  */
 
 import { NextRequest, NextResponse, after } from 'next/server'
-import { requireCompany } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendStageChangeEmail } from '@/lib/ats/notifications'
 import { fireHrmsWebhook } from '@/lib/ats/hrms-webhook'
 import { logEvent } from '@/lib/analytics/log-event'
+import { logAudit } from '@/lib/audit/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,8 @@ export async function PATCH(
 ) {
   try {
     const { id: assignmentId } = await params
-    const { company } = await requireCompany()
+    // P0-018: pipeline stage moves are a material action — require recruiter+
+    const { userId, role, company } = await requireRole('recruiter')
     const supabase = createServiceClient()
     const body = await req.json()
     const stage = body.stage as Stage
@@ -83,6 +85,15 @@ export async function PATCH(
           eventType: 'pipeline_stage_changed',
           companyId: company.id,
           entityId: assignmentId,
+          metadata: { stage, previous_stage: previousStage },
+        }))
+        tasks.push(logAudit({
+          companyId: company.id,
+          actorId: userId,
+          actorRole: role,
+          action: 'pipeline.stage_change',
+          targetType: 'assignment',
+          targetId: assignmentId,
           metadata: { stage, previous_stage: previousStage },
         }))
       }
