@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { after } from 'next/server'
+import CopyLinkButton from './CopyLinkButton'
 import { jobIdFromSlug, jobSlug } from '@/types'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -255,14 +256,7 @@ export default async function JobPage({ params }: Props) {
                 )}
 
                 {/* Share */}
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${appUrl}/jobs/${p.slug}`)
-                  }}
-                  className="mt-3 w-full py-2.5 rounded-xl border text-sm font-medium hover:bg-gray-50"
-                >
-                  📋 Copy job link
-                </button>
+                <CopyLinkButton url={`${appUrl}/jobs/${p.slug}`} />
               </div>
 
               {/* Company card */}
