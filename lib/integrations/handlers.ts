@@ -5,6 +5,7 @@
  */
 
 import type { Job } from '@/types'
+import { normalizeJobType, normalizeCurrencyCode, normalizeExperienceRange } from '@/lib/distribution/normalize'
 
 export interface IntegrationConfig {
   platform: string
@@ -34,13 +35,14 @@ export async function postToShine(job: Job, config: IntegrationConfig): Promise<
     return skip('Shine API key not configured')
   }
 
+  const shineExperience = normalizeExperienceRange(job.min_experience)
   const payload = {
     jobTitle: job.title,
     jobDescription: job.description,
     jobLocation: job.location,
-    jobType: mapJobTypeShine(job.job_type),
-    minExperience: job.min_experience ?? 0,
-    maxExperience: (job.min_experience ?? 0) + 5,
+    jobType: normalizeJobType(job.job_type, SHINE_JOB_TYPE_MAP),
+    minExperience: shineExperience.min,
+    maxExperience: shineExperience.max,
     minSalary: job.salary_min ?? undefined,
     maxSalary: job.salary_max ?? undefined,
     keySkills: Array.isArray(job.skills) ? (job.skills as string[]).join(',') : '',
@@ -72,14 +74,14 @@ export async function postToShine(job: Job, config: IntegrationConfig): Promise<
   }
 }
 
-function mapJobTypeShine(type: string | null): string {
-  switch (type) {
-    case 'full_time': return 'Full Time'
-    case 'part_time': return 'Part Time'
-    case 'contract': return 'Contract/Temp'
-    case 'internship': return 'Internship'
-    default: return 'Full Time'
-  }
+const SHINE_JOB_TYPE_MAP = {
+  full_time: 'Full Time',
+  part_time: 'Part Time',
+  contract: 'Contract/Temp',
+  internship: 'Internship',
+  // Not covered by the old switch (silently fell through to 'Full Time') —
+  // 'Contract/Temp' is the closer match of Shine's actual categories.
+  freelance: 'Contract/Temp',
 }
 
 // ── Foundit (Monster India) ───────────────────────────────────────────────────
@@ -89,17 +91,18 @@ export async function postToFoundit(job: Job, config: IntegrationConfig): Promis
     return skip('Foundit API key not configured')
   }
 
+  const founditExperience = normalizeExperienceRange(job.min_experience)
   const payload = {
     jobTitle: job.title,
     jobDescription: job.description,
     location: [job.location],
-    jobType: mapJobTypeFoundit(job.job_type),
+    jobType: normalizeJobType(job.job_type, FOUNDIT_JOB_TYPE_MAP),
     isRemote: !!job.remote,
-    minExperienceYrs: job.min_experience ?? 0,
-    maxExperienceYrs: (job.min_experience ?? 0) + 5,
+    minExperienceYrs: founditExperience.min,
+    maxExperienceYrs: founditExperience.max,
     salaryMin: job.salary_min ?? undefined,
     salaryMax: job.salary_max ?? undefined,
-    currency: job.salary_currency === '₹' ? 'INR' : job.salary_currency ?? 'INR',
+    currency: normalizeCurrencyCode(job.salary_currency),
     skills: Array.isArray(job.skills) ? (job.skills as string[]).slice(0, 15) : [],
     applyUrl: job.apply_url ?? `${APP_URL}/jobs/${job.id}`,
     openings: 1,
@@ -130,15 +133,12 @@ export async function postToFoundit(job: Job, config: IntegrationConfig): Promis
   }
 }
 
-function mapJobTypeFoundit(type: string | null): string {
-  switch (type) {
-    case 'full_time': return 'FULL_TIME'
-    case 'part_time': return 'PART_TIME'
-    case 'contract': return 'CONTRACT'
-    case 'internship': return 'INTERNSHIP'
-    case 'freelance': return 'CONTRACT'
-    default: return 'FULL_TIME'
-  }
+const FOUNDIT_JOB_TYPE_MAP = {
+  full_time: 'FULL_TIME',
+  part_time: 'PART_TIME',
+  contract: 'CONTRACT',
+  internship: 'INTERNSHIP',
+  freelance: 'CONTRACT',
 }
 
 // ── TimesJobs ────────────────────────────────────────────────────────────────
@@ -148,13 +148,22 @@ export async function postToTimesJobs(job: Job, config: IntegrationConfig): Prom
     return skip('TimesJobs API key not configured')
   }
 
+  const timesJobsExperience = normalizeExperienceRange(job.min_experience)
   const payload = {
     jobtitle: job.title,
     jobdescription: job.description,
     joblocation: job.location,
-    jobtype: job.job_type === 'full_time' ? 1 : 2,
-    minexp: job.min_experience ?? 0,
-    maxexp: (job.min_experience ?? 0) + 5,
+    // Previously `job.job_type === 'full_time' ? 1 : 2` — every non-full-time
+    // role (part-time, contract, internship, freelance) collapsed to the same
+    // code 2, a real bug. TimesJobs' actual code scheme isn't documented
+    // anywhere in this codebase (this integration has never gone through a
+    // real sandbox test) — reusing Naukri's numeric scheme here is a
+    // placeholder that at least distinguishes job types instead of
+    // conflating four of the five into one code; flag for verification
+    // against TimesJobs' real API docs before this integration goes live.
+    jobtype: normalizeJobType(job.job_type, TIMESJOBS_JOB_TYPE_MAP),
+    minexp: timesJobsExperience.min,
+    maxexp: timesJobsExperience.max,
     minsal: job.salary_min ?? undefined,
     maxsal: job.salary_max ?? undefined,
     skills: Array.isArray(job.skills) ? job.skills : [],
@@ -185,6 +194,14 @@ export async function postToTimesJobs(job: Job, config: IntegrationConfig): Prom
   }
 }
 
+const TIMESJOBS_JOB_TYPE_MAP = {
+  full_time: 1,
+  part_time: 2,
+  contract: 3,
+  internship: 4,
+  freelance: 3,
+}
+
 // ── ZipRecruiter ─────────────────────────────────────────────────────────────
 
 export async function postToZipRecruiter(job: Job, config: IntegrationConfig): Promise<PostResult> {
@@ -197,7 +214,7 @@ export async function postToZipRecruiter(job: Job, config: IntegrationConfig): P
       title: job.title,
       description: job.description,
       location: job.remote ? 'Remote' : job.location,
-      employment_type: mapJobTypeZip(job.job_type),
+      employment_type: normalizeJobType(job.job_type, ZIP_JOB_TYPE_MAP),
       remote: job.remote ?? false,
       salary_min: job.salary_min ?? undefined,
       salary_max: job.salary_max ?? undefined,
@@ -224,14 +241,13 @@ export async function postToZipRecruiter(job: Job, config: IntegrationConfig): P
   }
 }
 
-function mapJobTypeZip(type: string | null): string {
-  switch (type) {
-    case 'full_time': return 'full_time'
-    case 'part_time': return 'part_time'
-    case 'contract': return 'contractor'
-    case 'internship': return 'intern'
-    default: return 'full_time'
-  }
+const ZIP_JOB_TYPE_MAP = {
+  full_time: 'full_time',
+  part_time: 'part_time',
+  contract: 'contractor',
+  internship: 'intern',
+  // Not covered by the old switch (silently fell through to 'full_time')
+  freelance: 'contractor',
 }
 
 // ── Wellfound (AngelList) ─────────────────────────────────────────────────────
@@ -248,14 +264,17 @@ export async function postToWellfound(job: Job, config: IntegrationConfig): Prom
   const payload = {
     title: job.title,
     description: job.description,
-    job_type: mapJobTypeWellfound(job.job_type),
+    job_type: normalizeJobType(job.job_type, WELLFOUND_JOB_TYPE_MAP),
     location_type: job.remote ? 'remote' : 'onsite',
     location: job.location,
     skills: Array.isArray(job.skills) ? job.skills : [],
     min_years_experience: job.min_experience ?? 0,
     apply_url: job.apply_url ?? `${APP_URL}/jobs/${job.id}`,
+    // Previously hardcoded currency: 'INR' regardless of the job's actual
+    // salary_currency — every non-INR job silently mislabeled its own
+    // compensation figures to Wellfound.
     compensation: job.salary_min
-      ? { min: job.salary_min, max: job.salary_max ?? job.salary_min, currency: 'INR' }
+      ? { min: job.salary_min, max: job.salary_max ?? job.salary_min, currency: normalizeCurrencyCode(job.salary_currency) }
       : undefined,
   }
 
@@ -293,14 +312,13 @@ export async function postToWellfound(job: Job, config: IntegrationConfig): Prom
   }
 }
 
-function mapJobTypeWellfound(type: string | null): string {
-  switch (type) {
-    case 'full_time': return 'full_time'
-    case 'part_time': return 'part_time'
-    case 'contract': return 'contract'
-    case 'internship': return 'internship'
-    default: return 'full_time'
-  }
+const WELLFOUND_JOB_TYPE_MAP = {
+  full_time: 'full_time',
+  part_time: 'part_time',
+  contract: 'contract',
+  internship: 'internship',
+  // Not covered by the old switch (silently fell through to 'full_time')
+  freelance: 'contract',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

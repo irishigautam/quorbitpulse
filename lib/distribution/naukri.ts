@@ -12,6 +12,7 @@
 import type { Job, Company } from '@/types'
 import type { DistributionResult } from './indeed'
 import type { IntegrationConfig } from '@/lib/integrations/handlers'
+import { normalizeJobType, normalizeCurrencyCode, normalizeExperienceRange } from './normalize'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
 const NAUKRI_API = 'https://www.naukri.com/jobapi/v1'
@@ -34,18 +35,19 @@ export async function distributeToNaukri(
   }
 
   const applyUrl = job.apply_url ?? `${APP_URL}/jobs/${job.id}`
+  const experience = normalizeExperienceRange(job.min_experience)
 
   const payload = {
     title: job.title,
     description: job.description,
     location: [job.location],
-    jobType: mapJobType(job.job_type),
+    jobType: normalizeJobType(job.job_type, NAUKRI_JOB_TYPE_MAP),
     workFromHome: job.remote ? 1 : 0,
-    minExperience: job.min_experience ?? 0,
-    maxExperience: (job.min_experience ?? 0) + 5,
+    minExperience: experience.min,
+    maxExperience: experience.max,
     minSalary: job.salary_min ?? undefined,
     maxSalary: job.salary_max ?? undefined,
-    currency: job.salary_currency === '₹' ? 'INR' : job.salary_currency ?? 'INR',
+    currency: normalizeCurrencyCode(job.salary_currency),
     keySkills: Array.isArray(job.skills) ? (job.skills as string[]).slice(0, 10) : [],
     applyUrl,
     noOfOpenings: 1,
@@ -96,14 +98,11 @@ export async function distributeToNaukri(
   }
 }
 
-function mapJobType(type: string | null): number {
-  // Naukri job type codes
-  switch (type) {
-    case 'full_time': return 1
-    case 'part_time': return 2
-    case 'contract': return 3
-    case 'internship': return 9
-    case 'freelance': return 3
-    default: return 1
-  }
+// Naukri job type codes
+const NAUKRI_JOB_TYPE_MAP = {
+  full_time: 1,
+  part_time: 2,
+  contract: 3,
+  internship: 9,
+  freelance: 3,
 }

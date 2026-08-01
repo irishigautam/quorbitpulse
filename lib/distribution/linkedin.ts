@@ -11,6 +11,7 @@
 
 import type { Job, Company } from '@/types'
 import type { IntegrationConfig, PostResult } from '@/lib/integrations/handlers'
+import { normalizeJobType, formatSalaryDisplay } from './normalize'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
 const LI_API = 'https://api.linkedin.com/v2'
@@ -51,15 +52,13 @@ export async function distributeToLinkedIn(
 
   const jobUrl = `${APP_URL}/jobs/${job.id}`
   const skills = Array.isArray(job.skills) ? (job.skills as string[]).slice(0, 5).join(' • ') : ''
-  const salary =
-    job.salary_min && job.salary_max
-      ? ` | ${job.salary_currency ?? '₹'}${job.salary_min.toLocaleString()}–${job.salary_max.toLocaleString()}`
-      : ''
+  const salaryDisplay = formatSalaryDisplay(job)
+  const salary = salaryDisplay ? ` | ${salaryDisplay.replace(' per year', '')}` : ''
 
   const postText = `🚀 We're hiring: ${job.title}
 
 📍 ${job.location}${job.remote ? ' (Remote-friendly)' : ''}
-⏱ ${formatJobType(job.job_type)}${salary}
+⏱ ${normalizeJobType(job.job_type, LINKEDIN_JOB_TYPE_MAP)}${salary}
 ${skills ? `🛠 ${skills}` : ''}
 
 Apply now 👇
@@ -130,15 +129,12 @@ ${jobUrl}
   }
 }
 
-function formatJobType(type: string | null): string {
-  switch (type) {
-    case 'full_time': return 'Full-time'
-    case 'part_time': return 'Part-time'
-    case 'contract': return 'Contract'
-    case 'internship': return 'Internship'
-    case 'freelance': return 'Freelance'
-    default: return 'Full-time'
-  }
+const LINKEDIN_JOB_TYPE_MAP = {
+  full_time: 'Full-time',
+  part_time: 'Part-time',
+  contract: 'Contract',
+  internship: 'Internship',
+  freelance: 'Freelance',
 }
 
 /** Exchange LinkedIn auth code for access token */

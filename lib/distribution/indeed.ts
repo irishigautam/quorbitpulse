@@ -8,6 +8,7 @@
  */
 
 import type { Job, Company } from '@/types'
+import { normalizeJobType, formatSalaryDisplay } from './normalize'
 
 export interface DistributionResult {
   status: 'ok' | 'error' | 'skipped'
@@ -55,10 +56,7 @@ export async function distributeToIndeed(
 export function jobToIndeedXml(job: Job, company: Company): string {
   const jobUrl = `${APP_URL}/jobs/${job.id}`
   const applyUrl = job.apply_url ?? jobUrl
-  const salary =
-    job.salary_min && job.salary_max
-      ? `${job.salary_currency ?? '₹'}${job.salary_min.toLocaleString()}–${job.salary_max.toLocaleString()} per year`
-      : ''
+  const salary = formatSalaryDisplay(job) ?? ''
 
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -72,20 +70,17 @@ export function jobToIndeedXml(job: Job, company: Company): string {
     <city><![CDATA[${job.location}]]></city>
     <country>IN</country>
     <description><![CDATA[${job.description}]]></description>
-    <jobtype>${mapJobType(job.job_type)}</jobtype>
+    <jobtype>${normalizeJobType(job.job_type, INDEED_JOB_TYPE_MAP)}</jobtype>
     ${salary ? `<salary><![CDATA[${salary}]]></salary>` : ''}
     ${job.remote ? '<remotetype>Remote</remotetype>' : ''}
     <expirationdate>${new Date(job.expires_at).toUTCString()}</expirationdate>
   </job>`
 }
 
-function mapJobType(type: string | null): string {
-  switch (type) {
-    case 'full_time': return 'fulltime'
-    case 'part_time': return 'parttime'
-    case 'contract': return 'contract'
-    case 'internship': return 'internship'
-    case 'freelance': return 'contract'
-    default: return 'fulltime'
-  }
+const INDEED_JOB_TYPE_MAP = {
+  full_time: 'fulltime',
+  part_time: 'parttime',
+  contract: 'contract',
+  internship: 'internship',
+  freelance: 'contract',
 }
