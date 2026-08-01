@@ -61,7 +61,7 @@ export default function CandidateSignupPage() {
         Create your candidate profile
       </h1>
       <p style={{ color: 'var(--muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>
-        One profile. Apply to any company on Quorbit.
+        One profile. Apply to any company on Quorbit. Takes about 2 minutes — just this form and a resume upload.
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

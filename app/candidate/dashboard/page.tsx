@@ -50,18 +50,59 @@ export default async function CandidateDashboardPage() {
             Your Quorbit candidate dashboard
           </p>
         </div>
-        <a
-          href={`/candidate/profile/${candidate.public_slug}`}
-          style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', padding: '0.5rem 1rem', border: '1px solid var(--primary)', borderRadius: '6px' }}
-        >
-          View public profile →
-        </a>
+        {candidate.status === 'active' ? (
+          <a
+            href={`/candidate/profile/${candidate.public_slug}`}
+            style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', padding: '0.5rem 1rem', border: '1px solid var(--primary)', borderRadius: '6px' }}
+          >
+            View public profile →
+          </a>
+        ) : (
+          <span
+            title="Upload your resume to activate your public profile"
+            style={{ fontSize: '0.85rem', color: 'var(--muted)', padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'not-allowed' }}
+          >
+            Public profile (locked)
+          </span>
+        )}
       </div>
 
-      {/* Profile completeness */}
+      {/* Guided onboarding — 2 steps, ~2 min, only shown until profile is live */}
       {candidate.status === 'incomplete' && (
-        <div style={{ background: '#FEF9C3', border: '1px solid #EAB308', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-          <strong>Complete your profile</strong> — upload your resume to get matched with jobs.
+        <div style={{ background: '#FEF9C3', border: '1px solid #EAB308', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '8px' }}>
+            Finish your profile — about 2 minutes
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: '18px', height: '18px', borderRadius: '999px',
+                background: candidate.resume_processed_at ? '#22C55E' : '#fff',
+                border: candidate.resume_processed_at ? 'none' : '1.5px solid #EAB308',
+                color: '#fff', fontSize: '0.7rem', flexShrink: 0,
+              }}>
+                {candidate.resume_processed_at ? '✓' : '1'}
+              </span>
+              <span>
+                <strong>Upload your resume</strong> — required. AI extracts your skills and makes your profile live instantly.
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: '18px', height: '18px', borderRadius: '999px',
+                background: candidate.linkedin_url ? '#22C55E' : '#fff',
+                border: candidate.linkedin_url ? 'none' : '1.5px solid #D1D5DB',
+                color: '#fff', fontSize: '0.7rem', flexShrink: 0,
+              }}>
+                {candidate.linkedin_url ? '✓' : '2'}
+              </span>
+              <span style={{ color: 'var(--muted)' }}>
+                Add your LinkedIn URL — optional, doesn't affect your score.
+              </span>
+            </div>
+          </div>
         </div>
       )}
 

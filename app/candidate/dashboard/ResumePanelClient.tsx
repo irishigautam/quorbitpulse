@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { CandidateProfile } from '@/types'
 
 export default function ResumePanelClient({ candidate }: { candidate: CandidateProfile }) {
+  const router = useRouter()
   const [uploading, setUploading] = useState(false)
   const [resumeResult, setResumeResult] = useState<any>(null)
   const [resumeError, setResumeError] = useState('')
@@ -30,6 +32,10 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
       setResumeError(data.error ?? 'Upload failed')
     } else {
       setResumeResult(data.fingerprint)
+      // Resume upload flips status incomplete → active server-side; refresh
+      // the (server-rendered, force-dynamic) dashboard so the onboarding
+      // checklist, public profile link, and status banner all pick it up.
+      router.refresh()
     }
     setUploading(false)
     e.target.value = ''
@@ -169,9 +175,9 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
 
       {resumeResult && (
         <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#F0FDF4', borderRadius: '8px', fontSize: '0.8rem' }}>
-          <strong style={{ color: '#065F46' }}>✓ Resume parsed</strong>
+          <strong style={{ color: '#065F46' }}>✓ Profile live</strong>
           <p style={{ margin: '4px 0 0', color: '#374151' }}>
-            {resumeResult.skills?.length ?? 0} skills · {resumeResult.domain?.length ?? 0} domains extracted
+            {resumeResult.skills?.length ?? 0} skills · {resumeResult.domain?.length ?? 0} domains extracted. You're now matched against open roles.
           </p>
         </div>
       )}
@@ -189,10 +195,16 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1a1a1a' }}>
             {urlSaved ? 'LinkedIn URL saved ✓' : 'LinkedIn profile'}
           </span>
+          <span style={{
+            fontSize: '0.65rem', fontWeight: 600, color: 'var(--muted)',
+            background: '#F3F4F6', padding: '1px 6px', borderRadius: '999px',
+          }}>
+            Optional
+          </span>
         </div>
 
         <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '8px', lineHeight: 1.5 }}>
-          Add your LinkedIn URL — profile enrichment coming soon.
+          Doesn't affect your score — profile enrichment coming soon.
         </p>
 
         <div style={{ display: 'flex', gap: '6px' }}>
