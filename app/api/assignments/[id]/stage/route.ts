@@ -4,7 +4,7 @@
  * Also triggers ats6 (stage-change email) and ats7 (HRMS webhook) if configured.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { requireCompany } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendStageChangeEmail } from '@/lib/ats/notifications'
@@ -57,15 +57,6 @@ export async function PATCH(
 
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
-    if (stage !== previousStage) {
-      logEvent({
-        eventType: 'pipeline_stage_changed',
-        companyId: company.id,
-        entityId: assignmentId,
-        metadata: { stage, previous_stage: previousStage },
-      })
-    }
-
     // Also update candidate status if moved to hired/rejected
     if (stage === 'hired' || stage === 'rejected') {
       await supabase
@@ -75,32 +66,52 @@ export async function PATCH(
         .eq('company_id', company.id)
     }
 
-    // ats6 — stage change email (fire-and-forget)
+    // Post-response side effects. Previously fired without awaiting and without
+    // `after()` — same class of bug as jobs/create/route.ts (Gate 6): once the
+    // response is sent, Vercel can freeze the function before an un-awaited
+    // promise finishes, so the funnel event / stage-change email / HRMS webhook
+    // had no real guarantee of completing. `after()` keeps the function alive
+    // to finish this work without delaying the response.
     const candidate = assignment.candidate as any
     const job = assignment.job as any
-    if (candidate?.email && stage !== previousStage) {
-      sendStageChangeEmail({
-        candidateName: candidate.full_name,
-        candidateEmail: candidate.email,
-        jobTitle: job?.title ?? 'the role',
-        previousStage,
-        newStage: stage,
-        companyName: company.name,
-      }).catch(console.error)
-    }
 
-    // ats7 — HRMS webhook (fire-and-forget)
-    if (stage === 'hired' || stage === 'rejected') {
-      fireHrmsWebhook({
-        companyId: company.id,
-        event: stage === 'hired' ? 'candidate.hired' : 'candidate.rejected',
-        candidateId: candidate.id,
-        candidateName: candidate.full_name,
-        jobId: job?.id,
-        jobTitle: job?.title,
-        stage,
-      }).catch(console.error)
-    }
+    after(async () => {
+      const tasks: Promise<unknown>[] = []
+
+      if (stage !== previousStage) {
+        tasks.push(logEvent({
+          eventType: 'pipeline_stage_changed',
+          companyId: company.id,
+          entityId: assignmentId,
+          metadata: { stage, previous_stage: previousStage },
+        }))
+      }
+
+      if (candidate?.email && stage !== previousStage) {
+        tasks.push(sendStageChangeEmail({
+          candidateName: candidate.full_name,
+          candidateEmail: candidate.email,
+          jobTitle: job?.title ?? 'the role',
+          previousStage,
+          newStage: stage,
+          companyName: company.name,
+        }))
+      }
+
+      if (stage === 'hired' || stage === 'rejected') {
+        tasks.push(fireHrmsWebhook({
+          companyId: company.id,
+          event: stage === 'hired' ? 'candidate.hired' : 'candidate.rejected',
+          candidateId: candidate.id,
+          candidateName: candidate.full_name,
+          jobId: job?.id,
+          jobTitle: job?.title,
+          stage,
+        }))
+      }
+
+      await Promise.allSettled(tasks)
+    })
 
     return NextResponse.json({ id: assignmentId, stage, previousStage })
   } catch (err) {

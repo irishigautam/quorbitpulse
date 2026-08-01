@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       .eq('id', batch.id)
 
     if (inserted > 0) {
-      logEvent({
+      await logEvent({
         eventType: 'candidates_imported',
         companyId: company.id,
         entityId: batch.id,

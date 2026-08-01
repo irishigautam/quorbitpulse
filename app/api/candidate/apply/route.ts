@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: appErr.message }, { status: 500 })
     }
 
-    logEvent({
+    await logEvent({
       eventType: 'candidate_applied',
       companyId: company_id,
       entityId: application.id,

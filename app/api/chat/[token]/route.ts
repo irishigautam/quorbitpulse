@@ -202,7 +202,7 @@ export async function POST(
         .update({ status: 'chat_complete' })
         .eq('id', payload.candidateId)
 
-      logEvent({
+      await logEvent({
         eventType: 'chat_completed',
         companyId: payload.companyId,
         entityId: payload.candidateId,

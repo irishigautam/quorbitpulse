@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
         candidates_scored: successCount,
       }).catch(console.error)
 
-      logEvent({
+      await logEvent({
         eventType: 'candidates_scored',
         companyId,
         entityId: job_id,

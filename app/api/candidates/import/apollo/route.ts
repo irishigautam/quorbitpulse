@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (imported > 0) {
-      logEvent({
+      await logEvent({
         eventType: 'candidates_imported',
         companyId: company.id,
         metadata: { source: 'apollo', imported, skipped },

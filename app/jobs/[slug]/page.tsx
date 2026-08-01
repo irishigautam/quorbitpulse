@@ -14,15 +14,27 @@ async function getJob(slug: string) {
   const id8 = jobIdFromSlug(slug)
   const supabase = await createClient()
 
-  const { data: jobs } = await supabase
+  // `id` is a uuid column — plain ILIKE against it fails with
+  // "operator does not exist: uuid ~~* unknown" (Postgres has no ILIKE for
+  // uuid). This 404'd every single job detail page in production (confirmed
+  // via direct SQL during the Gate 6 smoke test — the exact same query
+  // errors with 42883 when run without the cast). `id::text` tells
+  // PostgREST to cast the column before applying the filter.
+  const { data: jobs, error } = await supabase
     .from('jobs')
     .select('*, company:companies(*)')
     .eq('status', 'active')
-    .ilike('id', `${id8}%`)
-    .limit(1)
+    .ilike('id::text', `${id8}%`)
+    .limit(5)
 
-  // Find the job whose slug matches exactly
-  return jobs?.find(j => jobSlug(j).endsWith(id8)) ?? jobs?.[0] ?? null
+  if (error) {
+    console.error('[jobs/[slug]] getJob query failed:', error)
+    return null
+  }
+
+  // Find the job whose slug matches exactly (id8 is only a prefix, so in the
+  // rare case of a collision across multiple active jobs, don't just grab jobs[0])
+  return jobs?.find(j => jobSlug(j).endsWith(id8)) ?? null
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

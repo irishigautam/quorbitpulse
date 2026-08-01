@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { pingGoogleIndexing } from '@/lib/google-indexing'
 import { sendJobPostedEmail } from '@/lib/emails'
@@ -58,20 +58,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
   }
 
-  logEvent({ eventType: 'job_posted', companyId: company.id, entityId: job.id })
-
   // Increment jobs_used
   await supabase
     .from('companies')
     .update({ jobs_used: company.jobs_used + 1 })
     .eq('id', company.id)
 
-  // Fire and forget: Google Indexing + confirmation email + multi-channel distribution
+  // Post-response side effects (Google indexing, email, multi-channel distribution,
+  // funnel logging). These were previously called without awaiting and without
+  // `after()` — on Vercel, once the response is sent the function can be frozen
+  // at any point, so an un-awaited async call has no guarantee of ever finishing.
+  // Confirmed in prod (Gate 6 smoke test): distribution_channels was left as `{}`
+  // on every job post because distributeJob() was getting cut off. `after()` keeps
+  // the function alive to actually finish this work without delaying the response.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
   const slug = jobSlug(job)
-  pingGoogleIndexing(`${appUrl}/jobs/${slug}`)
-  sendJobPostedEmail(company, job).catch(console.error)
-  distributeJob(job, company).catch(console.error)
+
+  after(async () => {
+    await Promise.allSettled([
+      pingGoogleIndexing(`${appUrl}/jobs/${slug}`),
+      sendJobPostedEmail(company, job),
+      distributeJob(job, company),
+      logEvent({ eventType: 'job_posted', companyId: company.id, entityId: job.id }),
+    ])
+  })
 
   return NextResponse.json({ success: true, job })
 }
