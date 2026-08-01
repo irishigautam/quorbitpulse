@@ -20,12 +20,31 @@ export async function POST(req: NextRequest) {
   const { userId, company, role } = await requireRole('recruiter')
   const supabase = await createClient()
 
-  if (!company.plan_active) return NextResponse.json({ error: 'Plan not active' }, { status: 403 })
-  if (company.jobs_used >= company.jobs_quota) {
-    return NextResponse.json({ error: 'Job quota exceeded' }, { status: 403 })
+  const form: PostJobFormValues & { status?: 'active' | 'draft' } = await req.json()
+  const isDraft = form.status === 'draft'
+
+  // Drafts don't count against the posting quota or require an active plan —
+  // both only matter once the job actually goes live. They're re-checked for
+  // real at /api/jobs/[id]/publish when a draft is published.
+  if (!isDraft) {
+    if (!company.plan_active) return NextResponse.json({ error: 'Plan not active' }, { status: 403 })
+    if (company.jobs_used >= company.jobs_quota) {
+      return NextResponse.json({ error: 'Job quota exceeded' }, { status: 403 })
+    }
   }
 
-  const form: PostJobFormValues = await req.json()
+  if (!form.title?.trim()) {
+    return NextResponse.json({ error: 'Job title is required' }, { status: 400 })
+  }
+  // Drafts are deliberately allowed to be incomplete — only publishing
+  // (here or via /api/jobs/[id]/publish) enforces the full field set.
+  if (!isDraft) {
+    if (!form.location?.trim()) return NextResponse.json({ error: 'Location is required' }, { status: 400 })
+    const descText = (form.description ?? '').replace(/<[^>]*>/g, '').trim()
+    if (descText.length < 100) {
+      return NextResponse.json({ error: 'Job description must be at least 100 characters' }, { status: 400 })
+    }
+  }
 
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 60)
@@ -35,11 +54,12 @@ export async function POST(req: NextRequest) {
     .insert({
       company_id: company.id,
       title: form.title.trim(),
-      description: form.description,
-      location: form.location.trim(),
+      description: form.description ?? '',
+      requirements: form.requirements?.trim() ? form.requirements : null,
+      location: form.location?.trim() ?? '',
       job_type: form.job_type,
       remote: form.remote,
-      skills: form.skills,
+      skills: form.skills ?? [],
       domain: form.domain ?? [],
       min_experience: form.min_experience ?? 0,
       salary_min: form.salary_min ? parseInt(form.salary_min) : null,
@@ -49,7 +69,7 @@ export async function POST(req: NextRequest) {
       // on-platform via /api/candidate/apply regardless of these.
       apply_url: form.apply_url?.trim() ? form.apply_url.trim() : null,
       apply_email: form.apply_email?.trim() ? form.apply_email.trim() : null,
-      status: 'active',
+      status: isDraft ? 'draft' : 'active',
       expires_at: expiresAt.toISOString(),
     })
     .select()
@@ -58,6 +78,24 @@ export async function POST(req: NextRequest) {
   if (error || !job) {
     console.error('[jobs/create]', error)
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
+  }
+
+  if (isDraft) {
+    // No quota, no distribution, no indexing, no notification email — none of
+    // that applies until the draft is actually published. Just log the audit
+    // trail entry so "who created this draft" is still traceable.
+    after(() =>
+      logAudit({
+        companyId: company.id,
+        actorId: userId,
+        actorRole: role,
+        action: 'job.create',
+        targetType: 'job',
+        targetId: job.id,
+        metadata: { title: job.title, status: 'draft' },
+      })
+    )
+    return NextResponse.json({ success: true, job })
   }
 
   // Increment jobs_used

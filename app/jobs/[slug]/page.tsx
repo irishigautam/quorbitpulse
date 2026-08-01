@@ -221,6 +221,19 @@ export default async function JobPage({ params }: Props) {
                 />
               </div>
 
+              {/* Requirements */}
+              {job.requirements && job.requirements.replace(/<[^>]*>/g, '').trim() && (
+                <div className="border-t pt-6 mt-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-4" style={{ color: 'var(--muted)' }}>
+                    Requirements
+                  </p>
+                  <div
+                    className="prose prose-sm max-w-none text-sm"
+                    dangerouslySetInnerHTML={{ __html: job.requirements }}
+                  />
+                </div>
+              )}
+
               {/* Posted date */}
               <p className="text-xs mt-6 pt-4 border-t" style={{ color: 'var(--muted)' }}>
                 Posted {new Date(job.posted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}

@@ -56,6 +56,7 @@ export default function PostJobPage() {
     salary_max: '',
     salary_currency: 'INR',
     description: '',
+    requirements: '',
     apply_url: '',
     apply_email: '',
   })
@@ -197,7 +198,7 @@ export default function PostJobPage() {
       const res = await fetch('/api/jobs/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, status: 'active' }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -208,6 +209,35 @@ export default function PostJobPage() {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Save Draft — deliberately minimal validation (title only) since a draft
+  // is by definition unfinished work the recruiter wants to resume later.
+  // Doesn't touch quota or trigger distribution/indexing — those only ever
+  // happen for status: 'active' jobs (see /api/jobs/create and
+  // /api/jobs/[id]/publish).
+  const [savingDraft, setSavingDraft] = useState(false)
+
+  const handleSaveDraft = async () => {
+    setError('')
+    if (!form.title.trim()) return setError('Give the job a title before saving as a draft.')
+    setSavingDraft(true)
+    try {
+      const res = await fetch('/api/jobs/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, status: 'draft' }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error ?? 'Failed to save draft')
+      }
+      router.push('/dashboard/jobs?drafted=1')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSavingDraft(false)
     }
   }
 
@@ -278,6 +308,13 @@ export default function PostJobPage() {
             <p className="text-xs font-semibold uppercase tracking-wide mb-4" style={{ color: 'var(--muted)' }}>About this role</p>
             <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: form.description }} />
           </div>
+
+          {form.requirements.replace(/<[^>]*>/g, '').trim() && (
+            <div className="border-t pt-6 mt-6">
+              <p className="text-xs font-semibold uppercase tracking-wide mb-4" style={{ color: 'var(--muted)' }}>Requirements</p>
+              <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: form.requirements }} />
+            </div>
+          )}
         </div>
 
         {error && (
@@ -414,6 +451,19 @@ export default function PostJobPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Requirements — distinct from the narrative description */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Requirements (optional)</label>
+          <RichTextEditor
+            value={form.requirements}
+            onChange={requirements => setForm(f => ({ ...f, requirements }))}
+            placeholder="Must-have qualifications, certifications, or hard requirements…"
+          />
+          <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
+            Kept separate from the description above — use this for a clear must-have list.
+          </p>
         </div>
 
         {/* Min experience + Role domain — side by side */}
@@ -610,6 +660,14 @@ export default function PostJobPage() {
             style={{ background: 'var(--accent)' }}
           >
             Preview →
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={savingDraft}
+            className="px-6 py-2.5 rounded-lg text-sm border hover:bg-gray-50"
+          >
+            {savingDraft ? 'Saving…' : 'Save as draft'}
           </button>
           <button
             type="button"

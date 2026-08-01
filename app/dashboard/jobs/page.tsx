@@ -28,7 +28,7 @@ function statusBadge(status: string, days: number) {
 export default async function MyJobsPage({
   searchParams,
 }: {
-  searchParams: { posted?: string }
+  searchParams: { posted?: string; drafted?: string }
 }) {
   const { company } = await requireCompany()
   const supabase = await createClient()
@@ -39,7 +39,9 @@ export default async function MyJobsPage({
     .eq('company_id', company.id)
     .order('posted_at', { ascending: false })
 
-  const posted = (await searchParams).posted === '1'
+  const sp = await searchParams
+  const posted = sp.posted === '1'
+  const drafted = sp.drafted === '1'
 
   return (
     <div>
@@ -59,6 +61,11 @@ export default async function MyJobsPage({
       {posted && (
         <div className="mb-4 px-4 py-3 rounded-xl text-sm font-medium" style={{ background: '#DCFCE7', color: '#166534' }}>
           ✓ Job posted successfully and is now live.
+        </div>
+      )}
+      {drafted && (
+        <div className="mb-4 px-4 py-3 rounded-xl text-sm font-medium" style={{ background: '#FEF3C7', color: '#92400E' }}>
+          ✓ Draft saved. It won't be visible to candidates or distributed until you publish it.
         </div>
       )}
 
@@ -185,13 +192,15 @@ export default async function MyJobsPage({
                 })()}
 
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t">
-                  <a
-                    href={`/jobs/${slug}`}
-                    target="_blank"
-                    className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50"
-                  >
-                    View live ↗
-                  </a>
+                  {job.status !== 'draft' && (
+                    <a
+                      href={`/jobs/${slug}`}
+                      target="_blank"
+                      className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50"
+                    >
+                      View live ↗
+                    </a>
+                  )}
                   <JobActionsClient jobId={job.id} status={job.status} />
                 </div>
               </div>

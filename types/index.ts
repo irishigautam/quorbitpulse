@@ -25,6 +25,7 @@ export interface Job {
   company_id: string
   title: string
   description: string
+  requirements: string | null
   location: string
   job_type: JobType
   remote: boolean
@@ -78,6 +79,9 @@ export interface PostJobFormValues {
   salary_max: string
   salary_currency: string
   description: string
+  // Optional, structured "must-haves" list — kept distinct from description
+  // so employers can separate role narrative from a hard requirements list.
+  requirements: string
   // Candidates always apply on-platform (via /api/candidate/apply) so every
   // application carries real profile data for AI scoring — an external
   // apply_url/mailto bypass would mean no candidate record, no fingerprint,

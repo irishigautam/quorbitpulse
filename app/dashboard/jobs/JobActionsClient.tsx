@@ -7,6 +7,8 @@ import Link from 'next/link'
 export default function JobActionsClient({ jobId, status }: { jobId: string; status: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState('')
 
   const handleExpire = async () => {
     if (!confirm('Mark this job as expired? It will be removed from the public board.')) return
@@ -20,6 +22,20 @@ export default function JobActionsClient({ jobId, status }: { jobId: string; sta
     setLoading(false)
   }
 
+  const handlePublish = async () => {
+    setPublishing(true)
+    setPublishError('')
+    const res = await fetch(`/api/jobs/${jobId}/publish`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) {
+      setPublishError(data.error ?? 'Failed to publish')
+      setPublishing(false)
+      return
+    }
+    router.refresh()
+    setPublishing(false)
+  }
+
   return (
     <>
       <Link
@@ -28,7 +44,21 @@ export default function JobActionsClient({ jobId, status }: { jobId: string; sta
       >
         Edit
       </Link>
-      {status !== 'expired' && (
+      {status === 'draft' && (
+        <button
+          onClick={handlePublish}
+          disabled={publishing}
+          title={publishError || undefined}
+          className="text-xs px-3 py-1.5 rounded-lg font-medium text-white transition-colors disabled:opacity-60"
+          style={{ background: 'var(--accent)' }}
+        >
+          {publishing ? 'Publishing…' : 'Publish →'}
+        </button>
+      )}
+      {publishError && (
+        <span className="text-xs text-red-600">{publishError}</span>
+      )}
+      {status !== 'expired' && status !== 'draft' && (
         <button
           onClick={handleExpire}
           disabled={loading}

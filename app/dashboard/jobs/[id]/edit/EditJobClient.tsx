@@ -32,6 +32,7 @@ export default function EditJobClient({ job }: { job: Job }) {
     salary_max: job.salary_max?.toString() ?? '',
     salary_currency: job.salary_currency ?? 'INR',
     description: job.description,
+    requirements: job.requirements ?? '',
     apply_url: job.apply_url ?? '',
     apply_email: job.apply_email ?? '',
   })
@@ -130,6 +131,15 @@ export default function EditJobClient({ job }: { job: Job }) {
             onChange={description => setForm(f => ({ ...f, description }))}
             placeholder="Describe the role, responsibilities, and requirements…"
           />
+        )}
+
+        {field('Requirements (optional)',
+          <RichTextEditor
+            value={form.requirements}
+            onChange={requirements => setForm(f => ({ ...f, requirements }))}
+            placeholder="Must-have qualifications, certifications, or hard requirements…"
+          />,
+          'Kept separate from the description above — use this for a clear must-have list.'
         )}
 
         <div className="grid grid-cols-2 gap-4">

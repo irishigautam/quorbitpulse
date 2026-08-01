@@ -54,6 +54,7 @@ export async function PATCH(
   const updates: Record<string, unknown> = {}
   if (form.title !== undefined) updates.title = form.title.trim()
   if (form.description !== undefined) updates.description = form.description
+  if (form.requirements !== undefined) updates.requirements = form.requirements?.trim() ? form.requirements : null
   if (form.location !== undefined) updates.location = form.location.trim()
   if (form.job_type !== undefined) updates.job_type = form.job_type
   if (form.remote !== undefined) updates.remote = form.remote
