@@ -122,23 +122,8 @@ export async function getCompanyForUser(): Promise<Company | null> {
   return data ?? null
 }
 
-/**
- * requireCandidate — returns authenticated candidate profile.
- * Redirects to /candidate/login if unauthenticated.
- */
-export async function requireCandidate() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) redirect('/candidate/login')
-
-  const { data: profile } = await supabase
-    .from('candidate_profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!profile) redirect('/candidate/signup')
-
-  return { userId: user.id, profile }
-}
+// Note: candidate auth lives in lib/candidate-auth.ts (requireCandidate(),
+// getCandidateForUser()) — that's the version every candidate route actually
+// imports. A duplicate, unused requireCandidate() used to live here too
+// (dead code, no imports anywhere); removed to avoid the two drifting apart
+// again the way they briefly did on the email-verification check.

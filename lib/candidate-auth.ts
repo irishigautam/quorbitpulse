@@ -12,6 +12,12 @@ export async function requireCandidate(): Promise<{ userId: string; candidate: C
 
   if (!user) redirect('/candidate/login')
 
+  // Defense-in-depth: block dashboard/API access for an unconfirmed email,
+  // mirroring requireCompany()'s check in lib/auth.ts. email_confirmed_at is
+  // set automatically at signup if confirmations are disabled project-wide,
+  // so this is a no-op in that case.
+  if (!user.email_confirmed_at) redirect('/candidate/verify-pending')
+
   const { data: candidate, error } = await supabase
     .from('candidate_profiles')
     .select('*')

@@ -224,6 +224,8 @@ export interface CandidateProfile {
   email: string
   location: string | null
   linkedin_url: string | null
+  portfolio_url: string | null
+  github_url: string | null
   current_title: string | null
   current_company: string | null
   resume_url: string | null
@@ -237,6 +239,10 @@ export interface CandidateProfile {
   years_experience: number | null
   fingerprint_summary: string | null
   resume_processed_at: string | null
+  // Self-service AI work history upload (own ChatGPT/Claude export)
+  llm_export_processed_at: string | null
+  llm_export_summary: string | null
+  llm_export_source: string | null
   // LinkedIn enrichment
   projects: { name: string; description: string; url: string | null }[]
   certifications: { name: string; issuer: string; issued_at: string | null }[]

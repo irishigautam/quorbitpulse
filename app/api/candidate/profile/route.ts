@@ -17,6 +17,19 @@ export const dynamic = 'force-dynamic'
 
 const VALID_SENIORITY = ['intern', 'junior', 'mid', 'senior', 'lead', 'principal']
 
+/** Loose http(s) URL check — these are just "show a link on my profile" fields, no domain gating like LinkedIn's. */
+function normaliseUrl(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  try {
+    const u = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`)
+    if (!['http:', 'https:'].includes(u.protocol)) return null
+    return u.toString()
+  } catch {
+    return null
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   const { candidate } = await requireCandidate()
   const body = await req.json()
@@ -31,6 +44,28 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.location === 'string') updates.location = body.location.trim() || null
   if (typeof body.current_title === 'string') updates.current_title = body.current_title.trim() || null
   if (typeof body.current_company === 'string') updates.current_company = body.current_company.trim() || null
+
+  if (typeof body.portfolio_url === 'string') {
+    if (!body.portfolio_url.trim()) {
+      updates.portfolio_url = null
+    } else {
+      const url = normaliseUrl(body.portfolio_url)
+      if (!url) return NextResponse.json({ error: 'Invalid portfolio URL' }, { status: 422 })
+      updates.portfolio_url = url
+    }
+  }
+  if (typeof body.github_url === 'string') {
+    if (!body.github_url.trim()) {
+      updates.github_url = null
+    } else {
+      const url = normaliseUrl(body.github_url)
+      if (!url) return NextResponse.json({ error: 'Invalid GitHub URL' }, { status: 422 })
+      if (!new URL(url).hostname.includes('github.com')) {
+        return NextResponse.json({ error: 'Must be a github.com URL' }, { status: 422 })
+      }
+      updates.github_url = url
+    }
+  }
 
   if (Array.isArray(body.skills)) {
     updates.skills = body.skills.map((s: unknown) => String(s).trim()).filter(Boolean)

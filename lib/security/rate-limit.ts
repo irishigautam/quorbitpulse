@@ -114,6 +114,10 @@ export const LIMITS = {
   optimizeJd: (companyId: string) =>
     rateLimit(companyId, { windowMs: 60 * 60_000, max: 20, keyPrefix: 'optimize-jd' }),
 
+  /** Candidate self-service LLM export upload: 3 / hour / candidate (mirrors the recruiter-side limit) */
+  candidateLlmExport: (candidateId: string) =>
+    rateLimit(candidateId, { windowMs: 60 * 60_000, max: 3, keyPrefix: 'candidate-llm-export' }),
+
   /** Auth / login attempts: 10 / 15 min / IP */
   auth: (ip: string) =>
     rateLimit(ip, { windowMs: 15 * 60_000, max: 10, keyPrefix: 'auth' }),

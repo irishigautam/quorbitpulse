@@ -15,6 +15,13 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
   const [urlSaved, setUrlSaved] = useState(!!candidate.linkedin_url)
   const [urlError, setUrlError] = useState('')
 
+  // Self-service AI work history upload — candidate uploads their own
+  // ChatGPT/Claude export to enrich their fingerprint. No consent gate
+  // needed (unlike the recruiter-initiated version) since it's their own data.
+  const [llmUploading, setLlmUploading] = useState(false)
+  const [llmResult, setLlmResult] = useState<any>(null)
+  const [llmError, setLlmError] = useState('')
+
   // P0-010 / P0-011 — profile was entirely read-only beyond resume re-upload
   // and the LinkedIn URL field. This lets a candidate correct a bad AI parse
   // or edit their basic identity fields.
@@ -30,6 +37,8 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
     domain: (candidate.domain ?? []).join(', '),
     seniority: candidate.seniority ?? '',
     years_experience: candidate.years_experience?.toString() ?? '',
+    portfolio_url: candidate.portfolio_url ?? '',
+    github_url: candidate.github_url ?? '',
   })
 
   async function handleSaveProfile() {
@@ -48,6 +57,8 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
         domain: editForm.domain.split(',').map(d => d.trim()).filter(Boolean),
         seniority: editForm.seniority || null,
         years_experience: editForm.years_experience === '' ? null : Number(editForm.years_experience),
+        portfolio_url: editForm.portfolio_url,
+        github_url: editForm.github_url,
       }),
     })
     const data = await res.json()
@@ -105,6 +116,29 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
       setUrlSaved(true)
     }
     setSavingUrl(false)
+  }
+
+  async function handleLlmUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLlmUploading(true)
+    setLlmError('')
+    setLlmResult(null)
+
+    const fd = new FormData()
+    fd.append('file', file)
+
+    const res = await fetch('/api/candidate/upload-llm-export', { method: 'POST', body: fd })
+    const data = await res.json()
+
+    if (!res.ok) {
+      setLlmError(data.error ?? 'Upload failed')
+    } else {
+      setLlmResult(data)
+      router.refresh()
+    }
+    setLlmUploading(false)
+    e.target.value = ''
   }
 
   const hasResume = !!candidate.resume_processed_at
@@ -169,6 +203,25 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
               style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
             />
           </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>Portfolio URL</div>
+            <input
+              type="url" value={editForm.portfolio_url}
+              onChange={e => setEditForm(f => ({ ...f, portfolio_url: e.target.value }))}
+              placeholder="https://yourname.dev"
+              style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>GitHub URL</div>
+            <input
+              type="url" value={editForm.github_url}
+              onChange={e => setEditForm(f => ({ ...f, github_url: e.target.value }))}
+              placeholder="https://github.com/yourname"
+              style={{ width: '100%', fontSize: '0.82rem', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: '6px', boxSizing: 'border-box' }}
+            />
+          </div>
+
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '2px' }}>Level</div>
@@ -261,6 +314,21 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
       {(candidate.current_title || candidate.current_company || candidate.location) && (
         <div style={{ marginBottom: '0.75rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
           {[candidate.current_title, candidate.current_company, candidate.location].filter(Boolean).join(' · ')}
+        </div>
+      )}
+
+      {(candidate.portfolio_url || candidate.github_url) && (
+        <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '10px', fontSize: '0.8rem' }}>
+          {candidate.portfolio_url && (
+            <a href={candidate.portfolio_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
+              🔗 Portfolio
+            </a>
+          )}
+          {candidate.github_url && (
+            <a href={candidate.github_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
+              GitHub
+            </a>
+          )}
         </div>
       )}
 
@@ -388,6 +456,63 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
 
         {urlError && (
           <p style={{ color: '#EF4444', fontSize: '0.78rem', marginTop: '6px' }}>{urlError}</p>
+        )}
+      </div>
+
+      {/* ── AI work history (self-service ChatGPT/Claude export) ── */}
+      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1a1a1a' }}>
+            {candidate.llm_export_processed_at ? 'AI work history uploaded ✓' : 'AI work history'}
+          </span>
+          <span style={{
+            fontSize: '0.65rem', fontWeight: 600, color: 'var(--muted)',
+            background: '#F3F4F6', padding: '1px 6px', borderRadius: '999px',
+          }}>
+            Optional
+          </span>
+        </div>
+
+        <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '8px', lineHeight: 1.5 }}>
+          Upload your own ChatGPT or Claude export to surface skills your resume might miss.
+          Personal conversations are filtered out automatically — only work-relevant content is analysed.
+        </p>
+
+        <label style={{
+          display: 'block',
+          textAlign: 'center',
+          padding: '0.6rem',
+          border: '1.5px dashed var(--border)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '0.85rem',
+          color: 'var(--primary)',
+        }}>
+          {llmUploading ? 'Analysing…' : candidate.llm_export_processed_at ? '↑ Upload a newer export' : '↑ Upload export (.json)'}
+          <input
+            type="file" accept=".json" onChange={handleLlmUpload}
+            disabled={llmUploading}
+            style={{ display: 'none' }}
+          />
+        </label>
+
+        {llmError && <p style={{ color: '#EF4444', fontSize: '0.78rem', marginTop: '6px' }}>{llmError}</p>}
+
+        {llmResult && (
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#F0FDF4', borderRadius: '8px', fontSize: '0.8rem' }}>
+            <strong style={{ color: '#065F46' }}>✓ Profile enriched</strong>
+            <p style={{ margin: '4px 0 0', color: '#374151' }}>
+              {llmResult.workRelevant} of {llmResult.classified} conversations were work-relevant ·{' '}
+              {llmResult.extracted?.skills?.length ?? 0} new skills found.
+            </p>
+          </div>
+        )}
+
+        {!llmResult && candidate.llm_export_source && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px' }}>
+            Last upload: {candidate.llm_export_source} export
+            {candidate.llm_export_processed_at ? `, ${new Date(candidate.llm_export_processed_at).toLocaleDateString()}` : ''}
+          </p>
         )}
       </div>
 

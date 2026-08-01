@@ -3,6 +3,7 @@
  */
 import { redirect } from 'next/navigation'
 
-export default function LegacyCandidateProfile({ params }: { params: { slug: string } }) {
-  redirect(`/candidate/${params.slug}`)
+export default async function LegacyCandidateProfile({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  redirect(`/candidate/${slug}`)
 }

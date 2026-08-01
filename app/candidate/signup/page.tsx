@@ -11,6 +11,8 @@ function CandidateSignupContent() {
   const [form, setForm] = useState({ full_name: '', email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [pendingConfirmation, setPendingConfirmation] = useState(false)
+  const [resent, setResent] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -23,7 +25,10 @@ function CandidateSignupContent() {
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
-      options: { data: { user_type: 'candidate', full_name: form.full_name } },
+      options: {
+        data: { user_type: 'candidate', full_name: form.full_name },
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectTo || '/candidate/dashboard')}`,
+      },
     })
 
     if (authErr || !authData.user) {
@@ -32,7 +37,10 @@ function CandidateSignupContent() {
       return
     }
 
-    // 2. Create candidate_profiles row
+    // 2. Create candidate_profiles row (candidate_profiles has no RLS gating
+    // on insert, so this succeeds whether or not a session was issued yet —
+    // unlike the employer flow's `companies` insert, no session ordering
+    // trick is needed here.)
     const slug = form.full_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       + '-' + Math.random().toString(36).slice(2, 8)
 
@@ -61,7 +69,54 @@ function CandidateSignupContent() {
       body: JSON.stringify({ eventType: 'candidate_signup', entityId: authData.user.id }),
     }).catch(() => {})
 
+    // If email confirmation is required, signUp() returns no session — show
+    // a "check your email" screen instead of pushing into the dashboard,
+    // which requireCandidate() would immediately bounce out of anyway.
+    if (!authData.session) {
+      setPendingConfirmation(true)
+      setLoading(false)
+      return
+    }
+
     router.push(redirectTo || '/candidate/dashboard')
+  }
+
+  async function handleResend() {
+    setLoading(true)
+    const supabase = createClient()
+    await supabase.auth.resend({
+      type: 'signup',
+      email: form.email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectTo || '/candidate/dashboard')}` },
+    })
+    setResent(true)
+    setLoading(false)
+  }
+
+  if (pendingConfirmation) {
+    return (
+      <div style={{ maxWidth: '420px', margin: '4rem auto', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>📧</div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', marginBottom: '0.5rem' }}>
+          Check your email
+        </h1>
+        <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+          We sent a confirmation link to <strong>{form.email}</strong>. Click it to activate your
+          profile — then you can come back and upload your resume.
+        </p>
+        {resent && (
+          <p style={{ color: '#15803D', background: '#F0FDF4', borderRadius: '8px', padding: '0.6rem', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            Confirmation email resent.
+          </p>
+        )}
+        <button
+          onClick={handleResend} disabled={loading}
+          style={{ fontSize: '0.85rem', color: 'var(--primary)', background: 'none', border: 'none', textDecoration: 'underline', cursor: loading ? 'not-allowed' : 'pointer' }}
+        >
+          {loading ? 'Sending…' : 'Resend confirmation email'}
+        </button>
+      </div>
+    )
   }
 
   return (

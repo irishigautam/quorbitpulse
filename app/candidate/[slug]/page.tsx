@@ -9,13 +9,14 @@ import { notFound } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CandidatePublicProfile({ params }: { params: { slug: string } }) {
+export default async function CandidatePublicProfile({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
   const supabase = createServiceClient()
 
   const { data: candidate } = await supabase
     .from('candidate_profiles')
-    .select('full_name, current_title, current_company, location, skills, domain, seniority, years_experience, fingerprint_summary, public_slug, status, created_at')
-    .eq('public_slug', params.slug)
+    .select('full_name, current_title, current_company, location, skills, domain, seniority, years_experience, fingerprint_summary, public_slug, status, created_at, portfolio_url, github_url')
+    .eq('public_slug', slug)
     .eq('status', 'active')
     .single()
 
@@ -57,6 +58,21 @@ export default async function CandidatePublicProfile({ params }: { params: { slu
           <p style={{ marginTop: '1rem', fontSize: '0.9rem', lineHeight: 1.6, color: '#374151', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
             {candidate.fingerprint_summary}
           </p>
+        )}
+
+        {(candidate.portfolio_url || candidate.github_url) && (
+          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)', display: 'flex', gap: '14px', fontSize: '0.85rem' }}>
+            {candidate.portfolio_url && (
+              <a href={candidate.portfolio_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 500 }}>
+                🔗 Portfolio
+              </a>
+            )}
+            {candidate.github_url && (
+              <a href={candidate.github_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 500 }}>
+                GitHub
+              </a>
+            )}
+          </div>
         )}
       </div>
 
