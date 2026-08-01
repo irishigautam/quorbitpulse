@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { after } from 'next/server'
 import { jobIdFromSlug, jobSlug } from '@/types'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -106,9 +107,22 @@ export default async function JobPage({ params }: Props) {
     ...(job.apply_url ? { applicationContact: { '@type': 'ContactPoint', url: job.apply_url } } : {}),
   }
 
-  // Increment views (fire and forget)
+  // Increment views (fire and forget). Two real bugs found here during the
+  // Gate 6 smoke test, previously masked by getJob() always 404ing before
+  // ever reaching this line: (1) supabase.rpc(...) returns a PostgrestFilterBuilder,
+  // which is thenable but has no .catch() method — `.catch(() => {})` threw
+  // "TypeError: ...rpc(...).catch is not a function" and 500'd the whole page.
+  // (2) same un-awaited-fire-and-forget risk as jobs/create/route.ts — no
+  // guarantee it finishes before Vercel freezes the function. `after()` plus
+  // `await`-ing the builder (not calling .catch on it) fixes both.
   const supabase = await createClient()
-  supabase.rpc('increment_job_views', { job_id: job.id }).catch(() => {})
+  after(async () => {
+    try {
+      await supabase.rpc('increment_job_views', { job_id: job.id })
+    } catch (err) {
+      console.error('[jobs/[slug]] increment_job_views failed:', err)
+    }
+  })
 
   return (
     <>
