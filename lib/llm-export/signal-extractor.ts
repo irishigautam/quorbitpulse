@@ -12,10 +12,8 @@
  * These signals are merged into the candidate's existing fingerprint.
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic, AI_SAFETY_GUARDRAILS } from '@/lib/ai/client'
 import type { ClassifiedConversation } from './privacy-classifier'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export interface ExtractedSignals {
   skills: string[]
@@ -36,7 +34,8 @@ Given a list of work-relevant conversation snippets from someone's LLM chat hist
 - summary: one sentence (max 20 words) describing professional focus
 
 Respond ONLY with JSON: { "skills": [], "domain": [], "seniority_evidence": [], "years_experience": null|number, "summary": "" }
-Do not include personal information. Do not infer things not evidenced in the text.`
+Do not include personal information. Do not infer things not evidenced in the text.
+${AI_SAFETY_GUARDRAILS}`
 
 export async function extractSignals(
   workConversations: ClassifiedConversation[],

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   },
   description:
     'Import candidates from LinkedIn, Naukri, Apollo, or a CSV. JobPulse scores every one against your open roles and validates readiness with an AI chat — plus auto-distributes your postings to 14 job boards.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'),
   openGraph: {
     type: 'website',
     siteName: 'JobPulse',

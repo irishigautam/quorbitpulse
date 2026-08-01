@@ -1,4 +1,4 @@
-import { resend, FROM_EMAIL, APP_URL } from '@/lib/resend'
+import { resend, FROM_EMAIL, APP_URL, REPLY_TO_EMAIL } from '@/lib/resend'
 import type { Company, Job } from '@/types'
 import { jobSlug } from '@/types'
 
@@ -24,6 +24,7 @@ export async function sendInternalAlertEmail(params: {
   const to = process.env.ADMIN_ALERT_EMAIL ?? 'rishi@thequorbit.com'
   await resend.emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
     to,
     subject: `[JobPulse alert] ${params.subject}`,
     html: `
@@ -54,6 +55,7 @@ export async function sendInternalAlertEmail(params: {
 export async function sendWelcomeEmail(company: Company) {
   await resend.emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
     to: company.careers_email ?? '',
     subject: 'Welcome to JobPulse — your account is active',
     html: `
@@ -98,6 +100,7 @@ export async function sendJobPostedEmail(company: Company, job: Job) {
 
   await resend.emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
     to: company.careers_email ?? '',
     subject: `Your job is live: ${job.title}`,
     html: `
@@ -138,6 +141,7 @@ export async function sendExpiryReminderEmail(company: Company, job: Job) {
 
   await resend.emails.send({
     from: FROM_EMAIL,
+    replyTo: REPLY_TO_EMAIL,
     to: company.careers_email ?? '',
     subject: `Your job posting expires in 7 days: ${job.title}`,
     html: `

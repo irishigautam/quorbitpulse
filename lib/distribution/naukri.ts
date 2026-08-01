@@ -14,7 +14,7 @@ import type { DistributionResult } from './indeed'
 import type { IntegrationConfig } from '@/lib/integrations/handlers'
 import { normalizeJobType, normalizeCurrencyCode, normalizeExperienceRange } from './normalize'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 const NAUKRI_API = 'https://www.naukri.com/jobapi/v1'
 
 export async function distributeToNaukri(

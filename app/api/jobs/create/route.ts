@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
   // Confirmed in prod (Gate 6 smoke test): distribution_channels was left as `{}`
   // on every job post because distributeJob() was getting cut off. `after()` keeps
   // the function alive to actually finish this work without delaying the response.
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
   const slug = jobSlug(job)
 
   after(async () => {

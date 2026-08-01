@@ -33,6 +33,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const activeJobs = allJobs.filter(j => j.status === 'active')
   const totalViews = allJobs.reduce((sum, j) => sum + (j.views ?? 0), 0)
   const quotaRemaining = company.jobs_quota - company.jobs_used
+
+  // EJ-07 (launch checklist) — dashboard previously had no applicant count
+  // at all, only job-level stats. Count self-signup applications
+  // (candidate_applications) plus recruiter-sourced candidates
+  // (imported_candidates), excluding import_source='direct_apply' since
+  // those rows are created alongside a candidate_applications row already
+  // (see app/api/candidate/apply/route.ts) and would otherwise be double-
+  // counted.
+  const { count: applicationCount } = await supabase
+    .from('candidate_applications')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', company.id)
+  const { count: sourcedCount } = await supabase
+    .from('imported_candidates')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', company.id)
+    .neq('import_source', 'direct_apply')
+  const totalApplicants = (applicationCount ?? 0) + (sourcedCount ?? 0)
   const planExpiry = company.plan_expires_at
     ? new Date(company.plan_expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'N/A'
@@ -61,7 +79,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard
           label="Jobs posted"
           value={`${company.jobs_used} / ${company.jobs_quota}`}
@@ -71,6 +89,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           label="Active listings"
           value={activeJobs.length}
           sub={`of ${allJobs.length} total`}
+        />
+        <StatCard
+          label="Applicants"
+          value={totalApplicants}
+          sub={`${applicationCount ?? 0} applied, ${sourcedCount ?? 0} sourced`}
         />
         <StatCard
           label="Total views"

@@ -79,7 +79,7 @@ export async function POST(
   })
 
   // Build the Claude desktop config snippet
-  const mcpEndpoint = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://quorbitpulse.vercel.app'}/api/mcp/candidate`
+  const mcpEndpoint = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'}/api/mcp/candidate`
 
   const claudeConfig = {
     mcpServers: {

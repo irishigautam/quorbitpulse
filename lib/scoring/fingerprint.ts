@@ -4,11 +4,7 @@
  * domain[], seniority, skills[], years_experience
  */
 
-import Anthropic from '@anthropic-ai/sdk'
-
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || 'ANTHROPIC_API_KEY_NOT_SET',
-})
+import { anthropic as client, AI_SAFETY_GUARDRAILS } from '@/lib/ai/client'
 
 export interface CandidateFingerprint {
   domain: string[]
@@ -89,7 +85,8 @@ Respond ONLY with valid JSON matching this shape:
   "skills": ["python", "kubernetes", "aws", "postgres"],
   "years_experience": 6,
   "summary": "Senior backend engineer with 6 years in Python, Kubernetes, and cloud infrastructure."
-}`
+}
+${AI_SAFETY_GUARDRAILS}`
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',

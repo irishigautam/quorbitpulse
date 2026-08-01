@@ -17,7 +17,7 @@ export interface DistributionResult {
   distributed_at: string
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 /**
  * "Distribute" to Indeed = make sure the XML feed is reachable and ping Indeed.

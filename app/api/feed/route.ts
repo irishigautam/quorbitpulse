@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const supabase = createServiceClient()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
   const { data: jobs } = await supabase
     .from('jobs')

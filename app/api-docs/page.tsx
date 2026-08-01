@@ -146,7 +146,7 @@ export default function ApiDocsPage() {
               </p>
               <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '16px 20px', marginBottom: '16px' }}>
                 <p style={{ fontWeight: 600, marginBottom: '8px', color: '#fff' }}>Base URL</p>
-                <code style={{ fontFamily: 'ui-monospace, monospace', color: '#93C5FD' }}>https://jobpulse.io/api/v1</code>
+                <code style={{ fontFamily: 'ui-monospace, monospace', color: '#93C5FD' }}>https://pulse.thequorbit.com/api/v1</code>
               </div>
               <p>All responses are JSON. CORS is enabled for all origins.</p>
             </div>
@@ -157,7 +157,7 @@ export default function ApiDocsPage() {
             <p style={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.8, fontSize: '0.9375rem' }}>
               No authentication required for any read endpoints. Just make the request.
             </p>
-            <Code>curl https://jobpulse.io/api/v1/jobs</Code>
+            <Code>curl https://pulse.thequorbit.com/api/v1/jobs</Code>
           </Section>
 
           {/* Jobs */}
@@ -177,10 +177,10 @@ export default function ApiDocsPage() {
                 { name: 'limit', type: 'integer', description: 'Max results (default 20, max 100)' },
                 { name: 'offset', type: 'integer', description: 'Pagination offset (default 0)' },
               ]}
-              example={`curl "https://jobpulse.io/api/v1/jobs?q=react&location=bangalore&remote=true&limit=5"
+              example={`curl "https://pulse.thequorbit.com/api/v1/jobs?q=react&location=bangalore&remote=true&limit=5"
 
 # With JS fetch:
-const res = await fetch('https://jobpulse.io/api/v1/jobs?q=engineer&limit=10')
+const res = await fetch('https://pulse.thequorbit.com/api/v1/jobs?q=engineer&limit=10')
 const { data, total } = await res.json()`}
               response={`{
   "data": [
@@ -218,7 +218,7 @@ const { data, total } = await res.json()`}
               method="GET"
               path="/api/v1/jobs/:id"
               description="Returns a single job posting by UUID, with company data nested."
-              example={`curl "https://jobpulse.io/api/v1/jobs/a1b2c3d4-e5f6-..."`}
+              example={`curl "https://pulse.thequorbit.com/api/v1/jobs/a1b2c3d4-e5f6-..."`}
               response={`{
   "id": "a1b2c3d4-...",
   "title": "Senior React Engineer",
@@ -238,7 +238,7 @@ const { data, total } = await res.json()`}
                 { name: 'limit', type: 'integer', description: 'Max results (default 20, max 100)' },
                 { name: 'offset', type: 'integer', description: 'Pagination offset' },
               ]}
-              example={`curl "https://jobpulse.io/api/v1/companies?limit=10"`}
+              example={`curl "https://pulse.thequorbit.com/api/v1/companies?limit=10"`}
               response={`{
   "data": [
     {
@@ -261,7 +261,7 @@ const { data, total } = await res.json()`}
               method="GET"
               path="/api/v1/companies/:id/jobs"
               description="Returns a company's full profile and all their active job listings."
-              example={`curl "https://jobpulse.io/api/v1/companies/z9y8x7.../jobs"`}
+              example={`curl "https://pulse.thequorbit.com/api/v1/companies/z9y8x7.../jobs"`}
               response={`{
   "company": { "id": "...", "name": "Acme Inc.", ... },
   "jobs": [ { "id": "...", "title": "..." }, ... ]
@@ -278,7 +278,7 @@ const { data, total } = await res.json()`}
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 600, marginBottom: '12px' }}>
               HTTP endpoint
             </h3>
-            <Code>POST https://jobpulse.io/api/mcp</Code>
+            <Code>POST https://pulse.thequorbit.com/api/mcp</Code>
 
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 600, marginBottom: '12px', marginTop: '24px' }}>
               Claude Desktop configuration
@@ -290,7 +290,7 @@ const { data, total } = await res.json()`}
   "mcpServers": {
     "jobpulse": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://jobpulse.io/api/mcp"]
+      "args": ["-y", "mcp-remote", "https://pulse.thequorbit.com/api/mcp"]
     }
   }
 }`}</Code>
@@ -318,7 +318,7 @@ const { data, total } = await res.json()`}
             <p style={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.8, fontSize: '0.9375rem', marginBottom: '16px' }}>
               All active jobs are available as an RSS 2.0 feed, updated every 5 minutes.
             </p>
-            <Code>GET https://jobpulse.io/api/feed</Code>
+            <Code>GET https://pulse.thequorbit.com/api/feed</Code>
             <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.875rem' }}>
               Content-Type: <code style={{ fontFamily: 'ui-monospace, monospace', color: '#93C5FD' }}>application/rss+xml</code>
             </p>

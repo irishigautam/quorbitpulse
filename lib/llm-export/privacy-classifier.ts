@@ -11,9 +11,7 @@
  * Personal content is NEVER stored or processed further.
  */
 
-import Anthropic from '@anthropic-ai/sdk'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+import { anthropic } from '@/lib/ai/client'
 
 export type PrivacyClass = 'work_relevant' | 'personal' | 'neutral' | 'skip'
 

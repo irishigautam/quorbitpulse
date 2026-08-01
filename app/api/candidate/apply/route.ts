@@ -8,12 +8,16 @@
  * Body: { job_id: string, company_id?: string }
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { logEvent } from '@/lib/analytics/log-event'
 import { computeMatchScore } from '@/lib/scoring/engine'
+import { sendApplicationReceivedEmail, sendNewApplicationEmail } from '@/lib/ats/notifications'
+import { notifyAttempt } from '@/lib/notifications/log'
 import type { CandidateFingerprint } from '@/lib/scoring/fingerprint'
 import type { CandidateProfile } from '@/types'
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +73,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Could not determine company' }, { status: 400 })
     }
 
+    // ID-04 (launch checklist) — logged before the duplicate-check/insert so
+    // a failure or duplicate further down still shows up as a "started but
+    // did not complete" gap between this and the candidate_applied event
+    // below, instead of that drop-off being invisible entirely.
+    await logEvent({
+      eventType: 'apply_started',
+      companyId: company_id,
+      entityId: job_id,
+      metadata: { candidate_id: candidate.id },
+    })
+
     // Check for duplicate application
     const { data: existing } = await supabase
       .from('candidate_applications')
@@ -90,7 +105,7 @@ export async function POST(req: NextRequest) {
     // so no extra AI call is needed here — just reuse it.
     const { data: candidateData } = await supabase
       .from('candidate_profiles')
-      .select('skills, domain, years_experience, seniority')
+      .select('skills, domain, years_experience, seniority, resume_file_path')
       .eq('id', candidate.id)
       .single()
 
@@ -161,12 +176,20 @@ export async function POST(req: NextRequest) {
           domain: candidateData?.domain ?? [],
           seniority: candidateData?.seniority,
           years_experience: candidateData?.years_experience,
+          resume_file_path: candidateData?.resume_file_path ?? null,
           status: 'new',
           fingerprint_status: 'done',
         })
         .select('id')
         .single()
       importedCandidateId = newImported?.id
+    } else if (candidateData?.resume_file_path) {
+      // Existing imported_candidates row (e.g. applying to a second job at
+      // the same company) — keep the resume file reference current.
+      await supabase
+        .from('imported_candidates')
+        .update({ resume_file_path: candidateData.resume_file_path })
+        .eq('id', importedCandidateId)
     }
 
     if (importedCandidateId) {
@@ -191,6 +214,50 @@ export async function POST(req: NextRequest) {
         .update({ match_score: matchScore, status: 'scored' })
         .eq('id', importedCandidateId)
     }
+
+    // CJ-05/CJ-07 + EJ-06 (launch checklist) — neither the candidate nor the
+    // employer previously got any email signal that an application had just
+    // happened; both had to notice inside the dashboard. Fire-and-forget via
+    // notifyAttempt() so a delivery failure is logged (and now alerted, see
+    // lib/notifications/log.ts) instead of silently vanishing, and never
+    // blocks the response the candidate is waiting on.
+    const { data: companyRow } = await supabase
+      .from('companies')
+      .select('name, careers_email')
+      .eq('id', company_id)
+      .single()
+
+    after(async () => {
+      await Promise.allSettled([
+        notifyAttempt({
+          channel: 'email',
+          template: 'application_received',
+          companyId: company_id,
+          recipient: candidate.email,
+          metadata: { jobId: job_id, applicationId: application.id },
+          send: () => sendApplicationReceivedEmail({
+            candidateName: candidate.full_name,
+            candidateEmail: candidate.email,
+            jobTitle: job.title,
+            companyName: companyRow?.name ?? 'the hiring team',
+          }),
+        }),
+        notifyAttempt({
+          channel: 'email',
+          template: 'new_application',
+          companyId: company_id,
+          recipient: companyRow?.careers_email ?? null,
+          metadata: { jobId: job_id, applicationId: application.id, candidateId: candidate.id },
+          send: () => sendNewApplicationEmail({
+            careersEmail: companyRow?.careers_email ?? '',
+            candidateName: candidate.full_name,
+            jobTitle: job.title,
+            matchScore,
+            dashboardUrl: `${APP_URL}/dashboard/candidates`,
+          }),
+        }),
+      ])
+    })
 
     return NextResponse.json({ application_id: application.id, match_score: matchScore })
   } catch (err: any) {

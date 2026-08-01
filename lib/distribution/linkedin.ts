@@ -13,7 +13,7 @@ import type { Job, Company } from '@/types'
 import type { IntegrationConfig, PostResult } from '@/lib/integrations/handlers'
 import { normalizeJobType, formatSalaryDisplay } from './normalize'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 const LI_API = 'https://api.linkedin.com/v2'
 
 /**

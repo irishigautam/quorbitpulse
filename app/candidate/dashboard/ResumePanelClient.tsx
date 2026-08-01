@@ -9,6 +9,19 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
   const [uploading, setUploading] = useState(false)
   const [resumeResult, setResumeResult] = useState<any>(null)
   const [resumeError, setResumeError] = useState('')
+  const [viewingResume, setViewingResume] = useState(false)
+
+  async function viewMyResume() {
+    setViewingResume(true)
+    try {
+      const res = await fetch('/api/candidate/resume-url')
+      const data = await res.json()
+      if (!res.ok) { setResumeError(data.error ?? 'No resume available'); return }
+      window.open(data.url, '_blank', 'noopener,noreferrer')
+    } finally {
+      setViewingResume(false)
+    }
+  }
 
   const [linkedinUrl, setLinkedinUrl] = useState(candidate.linkedin_url ?? '')
   const [savingUrl, setSavingUrl] = useState(false)
@@ -380,6 +393,19 @@ export default function ResumePanelClient({ candidate }: { candidate: CandidateP
           style={{ display: 'none' }}
         />
       </label>
+
+      {hasResume && candidate.resume_file_path && (
+        <button
+          onClick={viewMyResume}
+          disabled={viewingResume}
+          style={{
+            display: 'block', marginTop: '0.5rem', fontSize: '0.78rem', fontWeight: 600,
+            color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+          }}
+        >
+          {viewingResume ? 'Opening…' : '📄 View my resume'}
+        </button>
+      )}
 
       {resumeError && <p style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>{resumeError}</p>}
 

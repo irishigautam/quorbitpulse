@@ -41,7 +41,7 @@ export async function GET() {
     .filter(Boolean)
     .join('\n')
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <source>
   <publisher>Quorbit JobPulse</publisher>

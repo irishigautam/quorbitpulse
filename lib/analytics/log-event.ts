@@ -18,6 +18,11 @@ export type FunnelEventType =
   | 'candidates_scored'
   | 'chat_completed'
   | 'pipeline_stage_changed'
+  // ID-04 (launch checklist) — invite + apply funnel had no start-of-funnel
+  // signal, only completion events, so drop-off between "started" and
+  // "completed" was invisible.
+  | 'invite_sent'
+  | 'apply_started'
 
 export async function logEvent(params: {
   eventType: FunnelEventType

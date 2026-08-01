@@ -220,8 +220,8 @@ function ChatPanel({
             </div>
             <div className="flex items-center gap-3">
               {viewSession.readiness_score !== null && (
-                <div className="text-center">
-                  <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Readiness</p>
+                <div className="text-center" title="Self-reported from the candidate's own answers — a directional signal, not a verified assessment">
+                  <p className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Readiness (self-reported)</p>
                   <p className="text-2xl font-bold tabular-nums leading-tight"
                     style={{ color: readinessColor(viewSession.readiness_score) }}>
                     {viewSession.readiness_score}

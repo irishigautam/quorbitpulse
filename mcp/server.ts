@@ -6,7 +6,7 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js'
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 async function fetchAPI(path: string) {
   const res = await fetch(`${BASE_URL}/api/v1${path}`)

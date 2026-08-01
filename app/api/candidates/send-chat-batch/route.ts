@@ -16,6 +16,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createChatToken } from '@/lib/chat/token'
 import { Resend } from 'resend'
 import { LIMITS, rateLimitResponse } from '@/lib/security/rate-limit'
+import { REPLY_TO_EMAIL } from '@/lib/resend'
 
 export const dynamic = 'force-dynamic'
 
@@ -138,6 +139,7 @@ export async function POST(req: NextRequest) {
         if (candidate.email) {
           const { error: emailError } = await resend.emails.send({
             from: 'Quorbit Pulse <noreply@thequorbit.com>',
+            replyTo: REPLY_TO_EMAIL,
             to: candidate.email,
             subject: `You've been invited to a quick AI readiness chat for ${job.title}`,
             html: `

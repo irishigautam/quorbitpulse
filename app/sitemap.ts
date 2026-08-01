@@ -5,7 +5,7 @@ import { jobSlug } from '@/types'
 export const revalidate = 3600
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
   const supabase = createServiceClient()
 
   const { data: jobs } = await supabase

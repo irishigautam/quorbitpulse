@@ -45,7 +45,7 @@ export interface IntegrationDef {
   env_key?: string      // e.g. 'NAUKRI_API_KEY' — if set, managed mode is available
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 export const INTEGRATIONS: IntegrationDef[] = [
   // ── Auto-active (no setup needed) ──────────────────────────────

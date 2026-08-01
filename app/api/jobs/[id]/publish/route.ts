@@ -87,7 +87,7 @@ export async function POST(
     .update({ jobs_used: company.jobs_used + 1 })
     .eq('id', company.id)
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
   const slug = jobSlug(job)
 
   after(async () => {

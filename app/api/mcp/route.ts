@@ -7,7 +7,7 @@
  *   "mcpServers": {
  *     "jobpulse": {
  *       "command": "npx",
- *       "args": ["-y", "mcp-remote", "https://jobpulse.io/api/mcp"]
+ *       "args": ["-y", "mcp-remote", "https://pulse.thequorbit.com/api/mcp"]
  *     }
  *   }
  * }
@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 async function fetchJobsAPI(path: string) {
   const res = await fetch(`${BASE_URL}/api/v1${path}`)

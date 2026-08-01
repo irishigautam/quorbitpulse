@@ -9,11 +9,7 @@
  * silently).
  */
 
-import Anthropic from '@anthropic-ai/sdk'
-
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || 'ANTHROPIC_API_KEY_NOT_SET',
-})
+import { anthropic as client } from '@/lib/ai/client'
 
 export interface OptimizeJdInput {
   title: string
@@ -35,6 +31,7 @@ Rules:
 - Improve structure: add clear sections if missing (e.g. About the role, Responsibilities, Requirements, Nice to have) using only these HTML tags: <h3>, <p>, <ul>, <li>, <strong>, <em>. No other tags, no markdown, no code fences.
 - Fix grammar and vague language. Keep it concise — do not pad with filler.
 - If the draft is already well-structured, make light improvements rather than a full rewrite.
+- Never introduce language that implies a preference for a candidate's age, gender, race, religion, national origin, disability status, or any other protected characteristic (e.g. avoid phrases like "young and energetic" or "native English speaker" unless already present in the draft and clearly job-relevant).
 - Respond with ONLY the improved HTML description, nothing else — no preamble, no explanation.`
 
   const userPrompt = `Job title: ${input.title}

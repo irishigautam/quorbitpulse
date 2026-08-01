@@ -5,10 +5,8 @@
  * Uses Claude Haiku for extraction (same model as candidate fingerprinting).
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client } from '@/lib/ai/client'
 import type { SeniorityLevel } from '@/types'
-
-const client = new Anthropic()
 
 export interface JobFingerprint {
   skills: string[]

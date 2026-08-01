@@ -127,6 +127,7 @@ export interface ImportedCandidate {
   seniority: SeniorityLevel | null
   skills: string[]
   years_experience: number | null
+  resume_file_path: string | null
   fingerprint_at: string | null
   // AI Scoring — Phase 2
   ai_fingerprint: Record<string, unknown> | null
@@ -236,6 +237,7 @@ export interface CandidateProfile {
   current_title: string | null
   current_company: string | null
   resume_url: string | null
+  resume_file_path: string | null
   resume_text: string | null
   public_slug: string           // URL-safe unique slug for /candidate/profile/[slug]
   status: SelfServiceStatus

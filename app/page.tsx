@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'JobPulse — Your candidates, finally scored.',
 }
 
-const CODE_SAMPLE = `curl "https://jobpulse.io/api/v1/jobs?q=react&limit=5"
+const CODE_SAMPLE = `curl "https://pulse.thequorbit.com/api/v1/jobs?q=react&limit=5"
 
 # Response:
 {

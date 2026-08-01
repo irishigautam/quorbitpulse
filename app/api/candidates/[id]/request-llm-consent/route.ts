@@ -19,6 +19,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { requireCompany } from '@/lib/auth'
 import { createConsentToken } from '@/lib/consent/token'
 import { LIMITS } from '@/lib/security/rate-limit'
+import { REPLY_TO_EMAIL } from '@/lib/resend'
 import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
@@ -99,6 +100,7 @@ export async function POST(
     try {
       await resend.emails.send({
         from: FROM_EMAIL,
+        replyTo: REPLY_TO_EMAIL,
         to: candidate.email,
         subject: `${company.name} would like your permission for something`,
         html: buildEmailHtml({

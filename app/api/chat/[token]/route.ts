@@ -18,13 +18,9 @@ import { verifyChatToken } from '@/lib/chat/token'
 import { sanitizeText, detectPromptInjection } from '@/lib/security/sanitize'
 import { LIMITS } from '@/lib/security/rate-limit'
 import { logEvent } from '@/lib/analytics/log-event'
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic, AI_SAFETY_GUARDRAILS } from '@/lib/ai/client'
 
 export const dynamic = 'force-dynamic'
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || 'ANTHROPIC_API_KEY_NOT_SET',
-})
 
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_TURNS = 7 // 1 opener + 5 questions + 1 closing
@@ -48,7 +44,9 @@ Rules:
 - If the candidate goes off-topic, politely redirect.
 - Never discuss salary or compensation in detail beyond Q6.
 - If the candidate says anything inappropriate, politely close the conversation.
-- The READINESS_SCORE line must appear ONLY in your final closing message.`
+- The READINESS_SCORE line must appear ONLY in your final closing message.
+- READINESS_SCORE is a self-reported conversational signal for a human recruiter to weigh alongside other evidence — it is not a verification of the candidate's claims and must never be described to the candidate as a pass/fail result or hiring decision.
+${AI_SAFETY_GUARDRAILS}`
 
 interface TranscriptEntry {
   role: 'assistant' | 'user'

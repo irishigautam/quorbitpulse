@@ -3,7 +3,7 @@
  * Sends the document to Claude Haiku as a base64-encoded PDF document block.
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client, AI_SAFETY_GUARDRAILS } from '@/lib/ai/client'
 
 export interface ResumeFingerprint {
   full_name: string | null
@@ -18,14 +18,13 @@ export interface ResumeFingerprint {
   summary: string
 }
 
-const client = new Anthropic()
-
 export async function parseResume(pdfBuffer: Buffer): Promise<ResumeFingerprint> {
   const base64Pdf = pdfBuffer.toString('base64')
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
+    system: `You are extracting factual resume content only.${AI_SAFETY_GUARDRAILS}`,
     messages: [
       {
         role: 'user',

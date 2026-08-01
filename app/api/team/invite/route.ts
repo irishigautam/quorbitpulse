@@ -7,6 +7,8 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit/log'
+import { logEvent } from '@/lib/analytics/log-event'
+import { REPLY_TO_EMAIL } from '@/lib/resend'
 import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
   // Send email
   await resend.emails.send({
     from: 'Pulse by Quorbit <noreply@thequorbit.com>',
+    replyTo: REPLY_TO_EMAIL,
     to: email,
     subject: `You're invited to join ${company.name} on Pulse`,
     html: `
@@ -68,14 +71,19 @@ export async function POST(req: NextRequest) {
     `,
   })
 
-  after(() => logAudit({
-    companyId,
-    actorId: userId,
-    actorRole: requesterRole,
-    action: 'member.invite',
-    targetType: 'invite',
-    metadata: { email, role: role ?? 'recruiter' },
-  }))
+  after(async () => {
+    await Promise.allSettled([
+      logAudit({
+        companyId,
+        actorId: userId,
+        actorRole: requesterRole,
+        action: 'member.invite',
+        targetType: 'invite',
+        metadata: { email, role: role ?? 'recruiter' },
+      }),
+      logEvent({ eventType: 'invite_sent', companyId, entityId: invite.token, metadata: { email, role: role ?? 'recruiter' } }),
+    ])
+  })
 
   return NextResponse.json({ ok: true })
 }

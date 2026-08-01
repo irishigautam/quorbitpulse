@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   // Notify Google to remove from index + audit log (non-blocking, but guaranteed
   // to finish — see jobs/create/route.ts for why after() is needed here)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
   after(async () => {
     await Promise.allSettled([

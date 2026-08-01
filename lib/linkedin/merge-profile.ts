@@ -2,10 +2,8 @@
  * merge-profile.ts — Claude Haiku merges LinkedIn + resume fingerprint
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import { anthropic as client, AI_SAFETY_GUARDRAILS } from '@/lib/ai/client'
 import type { ProxycurlProfile } from './proxycurl'
-
-const client = new Anthropic()
 
 export interface MergedFingerprint {
   current_title: string | null
@@ -76,6 +74,7 @@ Return ONLY valid JSON:
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 800,
+    system: `You are merging factual candidate profile data only.${AI_SAFETY_GUARDRAILS}`,
     messages: [{ role: 'user', content: prompt }],
   })
 

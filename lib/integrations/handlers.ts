@@ -26,7 +26,7 @@ export interface PostResult {
   distributed_at: string
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 // ── Shine.com ────────────────────────────────────────────────────────────────
 

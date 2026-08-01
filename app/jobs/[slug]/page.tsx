@@ -73,7 +73,7 @@ export default async function JobPage({ params }: Props) {
 
   const { company } = job
   const salary = formatSalary(job.salary_min, job.salary_max, job.salary_currency)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
   // Schema.org JobPosting
   const jsonLd = {

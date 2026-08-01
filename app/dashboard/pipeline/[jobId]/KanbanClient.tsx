@@ -74,6 +74,21 @@ function CardModal({
   const [tags, setTags] = useState<string[]>(assignment.tags ?? [])
   const [newTag, setNewTag] = useState('')
   const [saving, setSaving] = useState(false)
+  const [resumeLoading, setResumeLoading] = useState(false)
+  const [resumeError, setResumeError] = useState('')
+
+  async function openResume() {
+    setResumeLoading(true)
+    setResumeError('')
+    try {
+      const res = await fetch(`/api/candidates/${assignment.candidate.id}/resume-url`)
+      const data = await res.json()
+      if (!res.ok) { setResumeError(data.error ?? 'No resume available'); return }
+      window.open(data.url, '_blank', 'noopener,noreferrer')
+    } finally {
+      setResumeLoading(false)
+    }
+  }
 
   async function saveNotes() {
     setSaving(true)
@@ -124,6 +139,15 @@ function CardModal({
               {c.current_title ?? '—'}{c.current_company ? ` · ${c.current_company}` : ''}
             </p>
             {c.email && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{c.email}</p>}
+            <button
+              onClick={openResume}
+              disabled={resumeLoading}
+              className="text-xs mt-1.5 px-2 py-0.5 rounded-full font-medium border hover:bg-gray-50 disabled:opacity-60"
+              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+            >
+              {resumeLoading ? 'Opening…' : '📄 View resume'}
+            </button>
+            {resumeError && <p className="text-xs mt-1" style={{ color: '#991B1B' }}>{resumeError}</p>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <ScorePill score={c.blended_score ?? c.match_score} />

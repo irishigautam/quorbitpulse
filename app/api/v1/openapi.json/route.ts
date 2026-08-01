@@ -8,7 +8,7 @@ const spec = {
     description: 'Free, open, read-only job data API. No authentication required.',
     contact: { email: 'hello@quorbit.com' },
   },
-  servers: [{ url: 'https://jobpulse.io/api/v1', description: 'Production' }],
+  servers: [{ url: 'https://pulse.thequorbit.com/api/v1', description: 'Production' }],
   paths: {
     '/jobs': {
       get: {
