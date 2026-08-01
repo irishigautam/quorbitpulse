@@ -12,6 +12,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { logAudit } from '@/lib/audit/log'
+import { computeJobFingerprint } from '@/lib/distribution/fingerprint'
 import type { PostJobFormValues } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -39,10 +40,12 @@ export async function PATCH(
     }
   }
 
-  // Verify the job belongs to this company before touching it
+  // Verify the job belongs to this company before touching it. Fetch the
+  // full row (not just id) — recomputing the fingerprint after a partial
+  // PATCH needs every content field, not just the ones this request changed.
   const { data: existing, error: fetchErr } = await supabase
     .from('jobs')
-    .select('id')
+    .select('*')
     .eq('id', id)
     .eq('company_id', company.id)
     .single()
@@ -69,6 +72,20 @@ export async function PATCH(
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+  }
+
+  // Fingerprint Job / Sync Status: recompute the content fingerprint against
+  // the merged (existing + this patch) job, and flag sync_status 'stale' if
+  // it no longer matches what was actually last sent to distribution
+  // channels — this is the only place a live job's content can drift from
+  // what LinkedIn/Naukri/etc. are serving, so it's the only place that needs
+  // to raise the flag. Drafts have never been distributed (distributed_fingerprint
+  // is null), so editing one has nothing to go stale against.
+  const merged = { ...existing, ...updates }
+  const newFingerprint = computeJobFingerprint(merged)
+  updates.fingerprint = newFingerprint
+  if (existing.distributed_fingerprint && newFingerprint !== existing.distributed_fingerprint) {
+    updates.sync_status = 'stale'
   }
 
   const { data: job, error } = await supabase

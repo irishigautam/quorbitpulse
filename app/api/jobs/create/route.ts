@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth'
 import { pingGoogleIndexing } from '@/lib/google-indexing'
 import { sendJobPostedEmail } from '@/lib/emails'
 import { distributeJob } from '@/lib/distribution'
+import { computeJobFingerprint } from '@/lib/distribution/fingerprint'
 import { logEvent } from '@/lib/analytics/log-event'
 import { logAudit } from '@/lib/audit/log'
 import { notifyAttempt } from '@/lib/notifications/log'
@@ -49,6 +50,28 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 60)
 
+  // Fingerprint Job: computed up front from the same content fields being
+  // inserted, so the row is born with a fingerprint instead of needing a
+  // separate backfill pass. For drafts this just establishes the baseline —
+  // sync_status stays 'not_distributed' until publish actually runs
+  // distribution against it.
+  const fingerprint = computeJobFingerprint({
+    title: form.title.trim(),
+    description: form.description ?? '',
+    requirements: form.requirements?.trim() ? form.requirements : null,
+    location: form.location?.trim() ?? '',
+    job_type: form.job_type,
+    remote: form.remote,
+    skills: form.skills ?? [],
+    domain: form.domain ?? [],
+    min_experience: form.min_experience ?? 0,
+    salary_min: form.salary_min ? parseInt(form.salary_min) : null,
+    salary_max: form.salary_max ? parseInt(form.salary_max) : null,
+    salary_currency: form.salary_currency,
+    apply_url: form.apply_url?.trim() ? form.apply_url.trim() : null,
+    apply_email: form.apply_email?.trim() ? form.apply_email.trim() : null,
+  })
+
   const { data: job, error } = await supabase
     .from('jobs')
     .insert({
@@ -71,6 +94,7 @@ export async function POST(req: NextRequest) {
       apply_email: form.apply_email?.trim() ? form.apply_email.trim() : null,
       status: isDraft ? 'draft' : 'active',
       expires_at: expiresAt.toISOString(),
+      fingerprint,
     })
     .select()
     .single()

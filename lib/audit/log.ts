@@ -16,6 +16,7 @@ export type AuditAction =
   | 'job.expire'
   | 'job.edit'
   | 'job.retry_distribution'
+  | 'job.resync_distribution'
   | 'member.invite'
   | 'member.invite_revoke'
   | 'member.role_change'

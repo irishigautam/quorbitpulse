@@ -44,6 +44,9 @@ export interface Job {
   google_indexed: boolean
   distributed_at: string | null
   distribution_channels: Record<string, { status: string; url?: string; error?: string; distributed_at: string }> | null
+  fingerprint: string | null
+  distributed_fingerprint: string | null
+  sync_status: 'not_distributed' | 'stale' | 'synced' | 'partial' | 'failed'
   // Joined field (not in DB column)
   company?: Company
 }

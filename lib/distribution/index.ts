@@ -9,18 +9,10 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server'
-import { distributeToIndeed } from './indeed'
-import { distributeToLinkedIn } from './linkedin'
-import { distributeToNaukri } from './naukri'
-import {
-  postToShine,
-  postToTimesJobs,
-  postToFoundit,
-  postToZipRecruiter,
-  postToWellfound,
-  type IntegrationConfig,
-  type PostResult,
-} from '@/lib/integrations/handlers'
+import { buildConnectorTasks } from './connector-manager'
+import { computeJobFingerprint } from './fingerprint'
+import { computeSyncStatus } from './sync-status'
+import type { IntegrationConfig, PostResult } from '@/lib/integrations/handlers'
 import type { Job, Company } from '@/types'
 
 export interface DistributionReport {
@@ -28,61 +20,16 @@ export interface DistributionReport {
 }
 
 /**
- * For managed-mode integration configs, inject platform-level env var credentials.
- * For owned-mode configs, return unchanged.
+ * Dispatch task map is now entirely registry-driven — see
+ * lib/distribution/connector-manager.ts. Adding/removing a channel is a
+ * CONNECTORS array edit there; this function no longer needs touching.
  */
-const MANAGED_CREDS: Record<string, { key: string; extra?: string }> = {
-  shine:        { key: process.env.SHINE_API_KEY ?? '',       extra: process.env.SHINE_RECRUITER_ID ?? '' },
-  timesjobs:    { key: process.env.TIMESJOBS_API_KEY ?? '',   extra: process.env.TIMESJOBS_PARTNER_ID ?? '' },
-  foundit:      { key: process.env.FOUNDIT_API_KEY ?? '',     extra: process.env.FOUNDIT_RECRUITER_ID ?? '' },
-  ziprecruiter: { key: process.env.ZIPRECRUITER_API_KEY ?? '' },
-}
-
-function resolveManagedConfig(cfg: IntegrationConfig, platform: string): IntegrationConfig {
-  if (cfg.mode !== 'managed') return cfg
-  const creds = MANAGED_CREDS[platform]
-  if (!creds) return cfg
-  return {
-    ...cfg,
-    api_key: creds.key || cfg.api_key,
-    extra_key: creds.extra !== undefined ? (creds.extra || cfg.extra_key) : cfg.extra_key,
-  }
-}
-
 async function buildTasks(
   job: Job,
   company: Company,
   configMap: Map<string, IntegrationConfig>
 ): Promise<Record<string, () => Promise<PostResult>>> {
-  const tasks: Record<string, () => Promise<PostResult>> = {}
-
-  // ── Always-on feed platforms ─────────────────────────────────────
-  tasks.google = async () => ({
-    status: 'ok' as const,
-    url: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/jobs/${job.id}`,
-    distributed_at: new Date().toISOString(),
-  })
-
-  tasks.indeed = () => distributeToIndeed(job, company)
-
-  tasks.glassdoor = async () => ({
-    status: 'ok' as const,
-    url: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/feeds/indeed`,
-    distributed_at: new Date().toISOString(),
-  })
-
-  // ── Owned + managed connections ───────────────────────────────────
-  // Pass the integration config so LinkedIn reads access_token from integration_configs,
-  // not the old company.linkedin_access_token column (which no longer exists).
-  if (configMap.has('linkedin'))    tasks.linkedin    = () => distributeToLinkedIn(job, company, configMap.get('linkedin'))
-  if (configMap.has('wellfound'))   tasks.wellfound   = () => postToWellfound(job, configMap.get('wellfound')!)
-  if (configMap.has('naukri'))      tasks.naukri      = () => distributeToNaukri(job, company, configMap.get('naukri'))
-  if (configMap.has('shine'))       tasks.shine       = () => postToShine(job, resolveManagedConfig(configMap.get('shine')!, 'shine'))
-  if (configMap.has('timesjobs'))   tasks.timesjobs   = () => postToTimesJobs(job, resolveManagedConfig(configMap.get('timesjobs')!, 'timesjobs'))
-  if (configMap.has('foundit'))     tasks.foundit     = () => postToFoundit(job, resolveManagedConfig(configMap.get('foundit')!, 'foundit'))
-  if (configMap.has('ziprecruiter')) tasks.ziprecruiter = () => postToZipRecruiter(job, resolveManagedConfig(configMap.get('ziprecruiter')!, 'ziprecruiter'))
-
-  return tasks
+  return buildConnectorTasks(job, company, configMap)
 }
 
 async function runTasksAndPersist(
@@ -90,7 +37,8 @@ async function runTasksAndPersist(
   company: Company,
   configMap: Map<string, IntegrationConfig>,
   tasks: Record<string, () => Promise<PostResult>>,
-  existingReport: DistributionReport
+  existingReport: DistributionReport,
+  opts: { isFullRun: boolean; existingDistributedFingerprint?: string | null } = { isFullRun: true }
 ): Promise<DistributionReport> {
   const supabase = createServiceClient()
 
@@ -113,6 +61,21 @@ async function runTasksAndPersist(
   // already 'ok', or intentionally skipped during a retry) are preserved.
   const report: DistributionReport = { ...existingReport, ...freshReport }
 
+  // Fingerprint Job / Sync Status: `currentFingerprint` is the job's live
+  // content hash (computed at create/edit/publish time). On a full run
+  // (distributeJob / resyncJob) every channel just received that content, so
+  // the distributed-fingerprint baseline moves forward to match. On a
+  // partial retry (only previously-failed channels re-run) the channels that
+  // were left untouched are still serving whatever content they last
+  // actually received — advancing the baseline here would silently mark a
+  // job "in sync" for content some channels never got, so retries keep
+  // whatever baseline was already recorded instead.
+  const currentFingerprint = job.fingerprint ?? computeJobFingerprint(job)
+  const distributedFingerprint = opts.isFullRun
+    ? currentFingerprint
+    : (opts.existingDistributedFingerprint ?? currentFingerprint)
+  const syncStatus = computeSyncStatus(report, currentFingerprint, distributedFingerprint)
+
   // Persist results
   try {
     await supabase
@@ -120,6 +83,9 @@ async function runTasksAndPersist(
       .update({
         distributed_at: new Date().toISOString(),
         distribution_channels: report,
+        fingerprint: currentFingerprint,
+        distributed_fingerprint: distributedFingerprint,
+        sync_status: syncStatus,
       })
       .eq('id', job.id)
 
@@ -163,8 +129,18 @@ export async function distributeJob(
   )
 
   const tasks = await buildTasks(job, company, configMap)
-  return runTasksAndPersist(job, company, configMap, tasks, {})
+  return runTasksAndPersist(job, company, configMap, tasks, {}, { isFullRun: true })
 }
+
+/**
+ * Resync — full re-run of every currently-configured channel, used when a
+ * job's sync_status is 'stale' (content edited after the last distribution
+ * run). Distinct entry point from distributeJob only for call-site clarity/
+ * audit logging; behavior is identical — every channel gets the job's
+ * current content and the distributed-fingerprint baseline advances to
+ * match it.
+ */
+export const resyncJob = distributeJob
 
 /**
  * P0-007 — Retry ONLY the channels that previously errored, leaving every
@@ -181,11 +157,12 @@ export async function retryFailedChannels(
 
   const { data: jobRow } = await supabase
     .from('jobs')
-    .select('distribution_channels')
+    .select('distribution_channels, distributed_fingerprint')
     .eq('id', job.id)
     .single()
 
   const existingReport: DistributionReport = (jobRow?.distribution_channels as DistributionReport) ?? {}
+  const existingDistributedFingerprint: string | null = jobRow?.distributed_fingerprint ?? null
 
   const failedChannels = Object.entries(existingReport)
     .filter(([, r]) => r.status === 'error')
@@ -216,7 +193,10 @@ export async function retryFailedChannels(
     return { report: existingReport, retried: [] }
   }
 
-  const report = await runTasksAndPersist(job, company, configMap, retryTasks, existingReport)
+  const report = await runTasksAndPersist(job, company, configMap, retryTasks, existingReport, {
+    isFullRun: false,
+    existingDistributedFingerprint,
+  })
   return { report, retried }
 }
 

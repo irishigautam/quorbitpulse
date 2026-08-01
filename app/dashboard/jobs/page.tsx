@@ -5,6 +5,8 @@ import type { Job } from '@/types'
 import { jobSlug } from '@/types'
 import JobActionsClient from './JobActionsClient'
 import RetryDistributionButton from './RetryDistributionButton'
+import ResyncDistributionButton from './ResyncDistributionButton'
+import { SYNC_STATUS_LABEL, SYNC_STATUS_COLOR } from '@/lib/distribution/sync-status'
 
 const CHANNEL_ICONS: Record<string, string> = {
   indeed: '🔵',
@@ -106,6 +108,19 @@ export default async function MyJobsPage({
                       <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-gray-100">
                         {job.job_type.replace('_', '-')}
                       </span>
+                      {job.status !== 'draft' && (() => {
+                        const syncColor = SYNC_STATUS_COLOR[job.sync_status] ?? SYNC_STATUS_COLOR.not_distributed
+                        const syncLabel = SYNC_STATUS_LABEL[job.sync_status] ?? SYNC_STATUS_LABEL.not_distributed
+                        return (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full font-medium"
+                            style={{ background: syncColor.bg, color: syncColor.fg }}
+                            title="Aggregate distribution sync status across all channels"
+                          >
+                            {syncLabel}
+                          </span>
+                        )
+                      })()}
                     </div>
                     <h2 className="font-semibold text-base truncate">{job.title}</h2>
                     <p className="text-sm mt-0.5" style={{ color: 'var(--muted)' }}>
@@ -185,6 +200,12 @@ export default async function MyJobsPage({
                             </Link>
                           </span>
                           <RetryDistributionButton jobId={job.id} failedCount={failed} />
+                        </p>
+                      )}
+                      {job.sync_status === 'stale' && (
+                        <p className="text-xs mt-1.5 flex items-center gap-2 flex-wrap" style={{ color: '#6D28D9' }}>
+                          <span>Job content changed since it was last sent to these channels — they may still be showing the old version.</span>
+                          <ResyncDistributionButton jobId={job.id} />
                         </p>
                       )}
                     </div>
