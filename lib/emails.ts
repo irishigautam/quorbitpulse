@@ -2,6 +2,53 @@ import { resend, FROM_EMAIL, APP_URL } from '@/lib/resend'
 import type { Company, Job } from '@/types'
 import { jobSlug } from '@/types'
 
+// ── Internal alert email ────────────────────────────────────────────────────
+
+/**
+ * notifyAttempt() (lib/notifications/log.ts) already records every failed
+ * email/webhook send to notification_log, but that was write-only — nobody
+ * saw a failure unless they happened to check /admin. This sends a single
+ * best-effort alert email so a failure is actually noticed close to when it
+ * happens. Deliberately NOT called from notifyAttempt's own send() path (that
+ * would recurse if the alert email itself failed) — callers must never let
+ * this throw, and it never calls notifyAttempt itself.
+ */
+export async function sendInternalAlertEmail(params: {
+  subject: string
+  channel: string
+  template: string
+  companyId?: string | null
+  recipient?: string | null
+  error: string
+}) {
+  const to = process.env.ADMIN_ALERT_EMAIL ?? 'rishi@thequorbit.com'
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: `[JobPulse alert] ${params.subject}`,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Inter, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 16px; color: #0A0F1E;">
+  <h1 style="font-size: 20px; margin-bottom: 4px;">⚠ Notification delivery failed</h1>
+  <p style="color: #6B7280; margin-top: 0;">Recorded in notification_log — this is just a heads-up, not a duplicate action.</p>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin: 16px 0;">
+    <tr><td style="padding: 6px 0; color: #6B7280; width: 110px;">Channel</td><td style="padding: 6px 0;">${params.channel}</td></tr>
+    <tr><td style="padding: 6px 0; color: #6B7280;">Template</td><td style="padding: 6px 0;">${params.template}</td></tr>
+    <tr><td style="padding: 6px 0; color: #6B7280;">Company</td><td style="padding: 6px 0;">${params.companyId ?? '—'}</td></tr>
+    <tr><td style="padding: 6px 0; color: #6B7280;">Recipient</td><td style="padding: 6px 0;">${params.recipient ?? '—'}</td></tr>
+  </table>
+  <div style="background: #FEF2F2; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #991B1B; word-break: break-word;">
+    ${params.error.slice(0, 500)}
+  </div>
+  <p style="font-size: 13px; color: #6B7280; margin-top: 20px;">
+    Full history: <a href="${APP_URL}/admin" style="color: #2563EB;">${APP_URL}/admin</a>
+  </p>
+</body>
+</html>`,
+  })
+}
+
 // ── Welcome email ──────────────────────────────────────────────────────────────
 
 export async function sendWelcomeEmail(company: Company) {

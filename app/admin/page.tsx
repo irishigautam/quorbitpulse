@@ -1,15 +1,21 @@
 /**
  * mo9 — Internal admin panel (user + revenue view).
- * Protected by ADMIN_SECRET env var — passed ONLY via X-Admin-Secret header.
  *
- * SECURITY: ?secret= query-param access was removed — URL params appear in
- * Vercel access logs, browser history, and referrer headers, which would
- * expose the secret. Use a tool like Postman or curl with -H for access.
+ * Two independent ways in:
+ * 1. X-Admin-Secret header (curl/Postman, for automation/scripts) — unchanged
+ *    from before. ?secret= query-param access stays removed: URL params leak
+ *    into Vercel access logs, browser history, and referrer headers.
+ * 2. A normal Supabase Auth session (the same login used for company/
+ *    candidate accounts) whose email is on the ADMIN_EMAILS allowlist (see
+ *    lib/admin-auth.ts) — added so this is actually browsable after signing
+ *    in normally, not curl-only. Neither path is required over the other.
  *
  * Access: curl -H "x-admin-secret: <ADMIN_SECRET>" https://pulse.thequorbit.com/admin
+ *      or sign in at /onboarding/login as an allowlisted email, then visit /admin.
  */
 
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { isAdminEmail } from '@/lib/admin-auth'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 
@@ -19,9 +25,17 @@ export default async function AdminPage() {
   const h = await headers()
   const secret = h.get('x-admin-secret')
   const adminSecret = process.env.ADMIN_SECRET
+  const hasValidSecret = !!adminSecret && secret === adminSecret
 
-  if (!adminSecret || secret !== adminSecret) {
-    redirect('/')
+  let hasAdminSession = false
+  if (!hasValidSecret) {
+    const sessionClient = await createClient()
+    const { data: { user } } = await sessionClient.auth.getUser()
+    hasAdminSession = isAdminEmail(user?.email)
+  }
+
+  if (!hasValidSecret && !hasAdminSession) {
+    redirect('/onboarding/login?redirect=/admin')
   }
 
   const supabase = createServiceClient()

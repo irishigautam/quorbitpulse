@@ -6,6 +6,8 @@
 import { requireCompany } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getMonthlyUsage, getLimits, getTier } from '@/lib/subscription'
+import { SYNC_STATUS_LABEL, SYNC_STATUS_COLOR, type SyncStatus } from '@/lib/distribution/sync-status'
+import type { FunnelEventType } from '@/lib/analytics/log-event'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +63,42 @@ export default async function UsageDashboardPage() {
   const pipelineConversion = (totalCandidates ?? 0) > 0
     ? Math.round(((hiredCount ?? 0) / (totalCandidates ?? 1)) * 100)
     : 0
+
+  // Job & distribution performance — this is what makes funnel_events (Gate 4)
+  // and sync_status (distribution flow) actually visible to the employer who
+  // generated them, instead of only ever appearing in /admin.
+  const { data: jobRows } = await supabase
+    .from('jobs')
+    .select('id, views, status, sync_status')
+    .eq('company_id', company.id)
+
+  const totalJobViews = (jobRows ?? []).reduce((sum: number, j: any) => sum + (j.views ?? 0), 0)
+  const publishedJobs = (jobRows ?? []).filter((j: any) => j.status !== 'draft')
+  const syncBreakdown: Record<SyncStatus, number> = {
+    not_distributed: 0, stale: 0, synced: 0, partial: 0, failed: 0,
+  }
+  for (const j of publishedJobs) {
+    const s = (j as any).sync_status as SyncStatus
+    syncBreakdown[s] = (syncBreakdown[s] ?? 0) + 1
+  }
+
+  const FUNNEL_TYPES: FunnelEventType[] = [
+    'job_posted', 'candidate_applied', 'candidates_imported', 'candidates_scored', 'chat_completed', 'pipeline_stage_changed',
+  ]
+  const fourteenDaysAgo = new Date()
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+
+  const { data: funnelEvents } = await supabase
+    .from('funnel_events')
+    .select('event_type, created_at')
+    .eq('company_id', company.id)
+    .gte('created_at', fourteenDaysAgo.toISOString())
+
+  const funnelTotals: Record<string, number> = {}
+  for (const t of FUNNEL_TYPES) funnelTotals[t] = 0
+  for (const e of funnelEvents ?? []) {
+    if (funnelTotals[e.event_type] !== undefined) funnelTotals[e.event_type]++
+  }
 
   const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1)
 
@@ -120,6 +158,51 @@ export default async function UsageDashboardPage() {
         <StatCard label="Scored candidates" value={scoredCandidates ?? 0} sub={`${totalCandidates ? Math.round(((scoredCandidates ?? 0) / totalCandidates) * 100) : 0}% of pool`} />
         <StatCard label="Chat response rate" value={`${chatResponseRate}%`} sub={`${chatsCompleted ?? 0} of ${chatsSent ?? 0} replied`} />
         <StatCard label="Pipeline conversion" value={`${pipelineConversion}%`} sub={`${hiredCount ?? 0} hired`} />
+      </div>
+
+      {/* Job & distribution performance */}
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.5rem', marginBottom: '1.25rem' }}>
+        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem' }}>Job & distribution performance</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <StatCard label="Total job views" value={totalJobViews} sub={`across ${publishedJobs.length} published job${publishedJobs.length !== 1 ? 's' : ''}`} />
+          <StatCard label="Synced everywhere" value={syncBreakdown.synced} sub={`of ${publishedJobs.length} published`} />
+          <StatCard label="Needs attention" value={syncBreakdown.stale + syncBreakdown.partial + syncBreakdown.failed} sub="stale, partial, or failed" />
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+          {(Object.keys(syncBreakdown) as SyncStatus[]).filter(s => syncBreakdown[s] > 0).map(s => (
+            <span
+              key={s}
+              className="text-xs px-2 py-0.5 rounded-full font-medium"
+              style={{ background: SYNC_STATUS_COLOR[s].bg, color: SYNC_STATUS_COLOR[s].fg }}
+            >
+              {SYNC_STATUS_LABEL[s]}: {syncBreakdown[s]}
+            </span>
+          ))}
+          {publishedJobs.length === 0 && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>No published jobs yet.</span>
+          )}
+        </div>
+        <a href="/dashboard/jobs" style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600 }}>
+          View jobs →
+        </a>
+      </div>
+
+      {/* Funnel — last 14 days, this company only */}
+      <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: '10px', padding: '1.5rem', marginBottom: '1.25rem' }}>
+        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.25rem' }}>Activity — last 14 days</h2>
+        <p style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '1rem' }}>
+          Job posted → candidate applied → candidates imported → scored → chat completed → pipeline stage changed.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+          {FUNNEL_TYPES.map(t => (
+            <div key={t} style={{ background: '#F9FAFB', borderRadius: '8px', padding: '0.75rem' }}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--muted)', textTransform: 'capitalize' }}>
+                {t.replace(/_/g, ' ')}
+              </div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{funnelTotals[t]}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Annual billing promo */}

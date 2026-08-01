@@ -11,6 +11,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { logError } from '@/lib/monitoring/log-error'
+import { sendInternalAlertEmail } from '@/lib/emails'
 
 export async function notifyAttempt(params: {
   channel: 'email' | 'webhook'
@@ -52,5 +53,24 @@ export async function notifyAttempt(params: {
       message,
       context: { channel: params.channel, companyId: params.companyId, recipient: params.recipient },
     })
+
+    // Best-effort proactive alert — notification_log + error_log above are
+    // both write-only until someone opens /admin. This is what actually
+    // surfaces a failure without anyone needing to go looking for it.
+    // Deliberately swallowed: an alert-email failure must never throw back
+    // into the caller, and must never itself go through notifyAttempt (that
+    // would recurse).
+    try {
+      await sendInternalAlertEmail({
+        subject: `${params.channel} send failed — ${params.template}`,
+        channel: params.channel,
+        template: params.template,
+        companyId: params.companyId,
+        recipient: params.recipient,
+        error: message,
+      })
+    } catch (alertErr) {
+      console.error('sendInternalAlertEmail failed:', alertErr)
+    }
   }
 }

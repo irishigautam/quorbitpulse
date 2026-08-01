@@ -15,12 +15,18 @@ export default function LoginPage() {
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const [magicSent, setMagicSent] = useState(false)
+  const [redirectTo, setRedirectTo] = useState('/dashboard')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('error') === 'link_expired') {
       setError('That link has expired or already been used. Request a new one below.')
     }
+    // Lets /admin (and anything else gated behind a normal login) send
+    // people here and land back where they meant to go, instead of always
+    // dropping into /dashboard regardless of what brought them here.
+    const redirect = params.get('redirect')
+    if (redirect && redirect.startsWith('/')) setRedirectTo(redirect)
   }, [])
 
   const handlePassword = async (e: React.FormEvent) => {
@@ -44,7 +50,7 @@ export default function LoginPage() {
       }
       return
     }
-    router.push('/dashboard')
+    router.push(redirectTo)
   }
 
   const handleMagic = async (e: React.FormEvent) => {
@@ -55,7 +61,7 @@ export default function LoginPage() {
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/confirm`,
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectTo)}`,
       },
     })
     setLoading(false)
