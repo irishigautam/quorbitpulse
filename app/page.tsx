@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import LiveJobCounter from './LiveJobCounter'
 
 export const metadata: Metadata = {
-  title: 'JobPulse — Post once. Hire everywhere.',
+  title: 'JobPulse — Your candidates, finally scored.',
 }
 
 const CODE_SAMPLE = `curl "https://jobpulse.io/api/v1/jobs?q=react&limit=5"
@@ -49,7 +49,7 @@ export default function LandingPage() {
             </Link>
             <Link href="/onboarding/signup"
               style={{ background: 'var(--accent)', color: '#fff', textDecoration: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 600 }}>
-              Post a job
+              Get started
             </Link>
           </div>
         </div>
@@ -64,18 +64,18 @@ export default function LandingPage() {
         </div>
 
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2.5rem, 6vw, 4rem)', fontWeight: 700, lineHeight: 1.1, marginBottom: '1.5rem' }}>
-          Post once.<br />
-          <span style={{ color: 'var(--accent)' }}>Hire everywhere.</span>
+          Your pipeline,<br />
+          <span style={{ color: 'var(--accent)' }}>finally scored.</span>
         </h1>
 
-        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 'clamp(1rem, 2vw, 1.25rem)', maxWidth: '600px', margin: '0 auto 2.5rem', lineHeight: 1.7 }}>
-          List your jobs on JobPulse and reach every job board, AI assistant, and candidate platform that queries our open registry.
+        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 'clamp(1rem, 2vw, 1.25rem)', maxWidth: '620px', margin: '0 auto 2.5rem', lineHeight: 1.7 }}>
+          Import candidates from LinkedIn, Naukri, Apollo, or a CSV — however you already source. Quorbit Pulse scores every one against your open roles and validates readiness with a short AI chat, so you interview five people instead of scanning two hundred.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link href="/onboarding/signup"
             style={{ background: 'var(--accent)', color: '#fff', textDecoration: 'none', padding: '14px 28px', borderRadius: '10px', fontWeight: 700, fontSize: '1rem', fontFamily: 'var(--font-display)' }}>
-            List your jobs — ₹3,999/year
+            Start scoring candidates — ₹3,999/year
           </Link>
           <Link href="/jobs"
             style={{ color: 'rgba(255,255,255,0.8)', textDecoration: 'none', padding: '14px 28px', borderRadius: '10px', fontWeight: 600, fontSize: '1rem', border: '1px solid rgba(255,255,255,0.2)' }}>
@@ -94,9 +94,9 @@ export default function LandingPage() {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { step: '01', title: 'Sign up and pay once', body: '₹3,999/year for 30 job postings. No recurring fees, no per-seat pricing, no surprises.' },
-              { step: '02', title: 'Post with our simple form', body: 'Rich text editor, skills tags, salary ranges, and a one-click apply setup. Takes 5 minutes.' },
-              { step: '03', title: 'Reach everywhere automatically', body: 'Your job appears on our portal, REST API, MCP server, RSS feed, and Google Jobs — instantly.' },
+              { step: '01', title: 'Import from anywhere', body: 'Upload a CSV, paste LinkedIn or Naukri profiles, or connect Apollo. No new sourcing habit to learn — keep working the way you already do.' },
+              { step: '02', title: 'AI scores every candidate', body: 'Each profile is fingerprinted for skills, seniority, and domain, then matched against your open roles in seconds — not hours of manual screening.' },
+              { step: '03', title: 'AI chat validates readiness', body: 'A short automated conversation confirms fit and interest before you spend interview time. Blended score: 70% role match + 30% chat signal.' },
             ].map(item => (
               <div key={item.step}>
                 <p style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', fontWeight: 800, color: 'rgba(37,99,235,0.25)', lineHeight: 1, marginBottom: '0.75rem' }}>
@@ -120,17 +120,17 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
             <div>
               <p className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--accent)' }}>
-                For companies
+                For recruiting teams
               </p>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.75rem, 3vw, 2.5rem)', fontWeight: 700, marginBottom: '1.5rem', lineHeight: 1.2 }}>
-                10x cheaper than Naukri.<br />10x broader reach.
+                Stop scanning resumes.<br />Start reviewing a shortlist.
               </h2>
               <div className="space-y-4">
                 {[
-                  ['30 postings for ₹3,999/year', 'Less than ₹134 per job listing.'],
-                  ['Auto-indexed on Google Jobs', 'Every posting gets structured data markup and Google Indexing API pings.'],
-                  ['Appears in AI job search', 'Claude, ChatGPT, Perplexity, and other AI tools query our MCP server.'],
-                  ['Simple dashboard, no ATS required', 'Post a job in 5 minutes. No 6-month enterprise contracts.'],
+                  ['AI candidate scoring & fingerprinting', 'Every imported candidate gets a match score against your role — skills, domain, seniority, and experience.'],
+                  ['AI chat validates fit', 'A short automated conversation checks readiness and interest before you schedule a call.'],
+                  ['Works with your existing sourcing', 'Keep sourcing from LinkedIn, Naukri, Apollo, or referrals — Quorbit Pulse sits on top, not instead of.'],
+                  ['Also reaches 14 job boards', 'Post once and your listing auto-distributes to Google Jobs, AI assistants, and more — for candidates you don’t already have.'],
                 ].map(([title, body]) => (
                   <div key={title} className="flex gap-3">
                     <span style={{ color: 'var(--accent)', fontSize: '1.25rem', marginTop: '2px', flexShrink: 0 }}>✓</span>
@@ -143,7 +143,7 @@ export default function LandingPage() {
               </div>
               <Link href="/onboarding/signup"
                 style={{ display: 'inline-block', marginTop: '2rem', background: 'var(--accent)', color: '#fff', textDecoration: 'none', padding: '12px 24px', borderRadius: '10px', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
-                Start posting →
+                Start scoring →
               </Link>
             </div>
 
@@ -152,7 +152,7 @@ export default function LandingPage() {
               <div style={{ fontSize: '3rem', fontWeight: 800, fontFamily: 'var(--font-display)', marginBottom: '4px' }}>₹3,999</div>
               <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.875rem', marginBottom: '24px' }}>per year · ~$49 USD</p>
               <div className="space-y-3 text-sm">
-                {['30 active job postings', 'Live for 60 days each', 'Google Jobs indexing', 'AI search visibility', 'REST API + MCP + RSS', 'Dashboard + analytics', 'Email confirmations'].map(f => (
+                {['AI candidate scoring & fingerprinting', 'AI chat readiness validation', '30 active job postings', 'Live for 60 days each', 'Google Jobs indexing', 'AI search visibility', 'REST API + MCP + RSS', 'Dashboard + analytics', 'Email confirmations'].map(f => (
                   <div key={f} className="flex items-center gap-2">
                     <span style={{ color: 'var(--accent)' }}>✓</span>
                     <span style={{ color: 'rgba(255,255,255,0.8)' }}>{f}</span>

@@ -4,11 +4,11 @@ import CookieConsent from './components/CookieConsent'
 
 export const metadata: Metadata = {
   title: {
-    default: 'JobPulse — Post once. Reach everywhere.',
+    default: 'JobPulse — Your candidates, finally scored.',
     template: '%s | JobPulse',
   },
   description:
-    'List your jobs on JobPulse and reach every job board, AI assistant, and candidate platform that queries our open registry.',
+    'Import candidates from LinkedIn, Naukri, Apollo, or a CSV. JobPulse scores every one against your open roles and validates readiness with an AI chat — plus auto-distributes your postings to 14 job boards.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.io'),
   openGraph: {
     type: 'website',
