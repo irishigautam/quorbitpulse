@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type MouseEvent } from 'react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -232,18 +232,27 @@ function CardModal({
 function KanbanCard({
   assignment,
   onClick,
+  onToggleStar,
 }: {
   assignment: Assignment
   onClick: () => void
+  onToggleStar: (e: MouseEvent) => void
 }) {
   const c = assignment.candidate
   return (
     <button onClick={onClick}
       className="w-full text-left bg-white rounded-xl border p-3 hover:border-blue-300 hover:shadow-sm transition-all group">
       <div className="flex items-start justify-between gap-2 mb-1.5">
-        <p className="font-medium text-sm leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">
+        <p className="font-medium text-sm leading-tight group-hover:text-blue-600 transition-colors line-clamp-1 flex-1">
           {c.full_name}
         </p>
+        <button
+          onClick={onToggleStar}
+          title={assignment.starred ? 'Unstar' : 'Star / shortlist'}
+          className="flex-shrink-0 text-base leading-none transition-transform hover:scale-110"
+          style={{ color: assignment.starred ? '#F59E0B' : '#D1D5DB' }}>
+          {assignment.starred ? '★' : '☆'}
+        </button>
         <ScorePill score={c.blended_score ?? c.match_score} />
       </div>
       {c.current_title && (
@@ -313,6 +322,24 @@ export default function KanbanClient({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stage }),
+    })
+  }
+
+  async function handleToggleStar(assignment: Assignment) {
+    const nextStarred = !assignment.starred
+    startTransition(() => {
+      setAssignments(prev => prev.map(a =>
+        a.id === assignment.id ? { ...a, starred: nextStarred } : a
+      ))
+    })
+    await fetch('/api/candidates/assign', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidate_id: assignment.candidate.id,
+        job_id: jobId,
+        starred: nextStarred,
+      }),
     })
   }
 
@@ -500,7 +527,11 @@ export default function KanbanClient({
                         />
                       </div>
                       <div className="pl-5">
-                        <KanbanCard assignment={a} onClick={() => setSelected(a)} />
+                        <KanbanCard
+                          assignment={a}
+                          onClick={() => setSelected(a)}
+                          onToggleStar={(e) => { e.stopPropagation(); handleToggleStar(a) }}
+                        />
                       </div>
                     </div>
                   ))}
@@ -528,7 +559,11 @@ export default function KanbanClient({
                   />
                 </div>
                 <div className="pl-5">
-                  <KanbanCard assignment={a} onClick={() => setSelected(a)} />
+                  <KanbanCard
+                    assignment={a}
+                    onClick={() => setSelected(a)}
+                    onToggleStar={(e) => { e.stopPropagation(); handleToggleStar(a) }}
+                  />
                 </div>
               </div>
             ))}

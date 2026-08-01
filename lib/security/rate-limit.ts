@@ -110,6 +110,10 @@ export const LIMITS = {
   jobCreate: (companyId: string) =>
     rateLimit(companyId, { windowMs: 60 * 60_000, max: 30, keyPrefix: 'job-create' }),
 
+  /** JD optimize (AI call): 20 / hour / company */
+  optimizeJd: (companyId: string) =>
+    rateLimit(companyId, { windowMs: 60 * 60_000, max: 20, keyPrefix: 'optimize-jd' }),
+
   /** Auth / login attempts: 10 / 15 min / IP */
   auth: (ip: string) =>
     rateLimit(ip, { windowMs: 15 * 60_000, max: 10, keyPrefix: 'auth' }),

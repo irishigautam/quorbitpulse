@@ -62,6 +62,7 @@ export default function PostJobPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [quota, setQuota] = useState<{ used: number; total: number } | null>(null)
+  const [step, setStep] = useState<'form' | 'preview'>('form')
 
   // Detection state
   const [detecting, setDetecting] = useState(false)
@@ -69,6 +70,11 @@ export default function PostJobPage() {
   const [detectedLevel, setDetectedLevel] = useState<SeniorityLevel | null>(null)
   const [skillLayers, setSkillLayers] = useState<SkillLayers>({ domain: [], seniority: [] })
   const detectTimer = useRef<NodeJS.Timeout | null>(null)
+
+  // AI JD optimization
+  const [optimizing, setOptimizing] = useState(false)
+  const [optimizedDescription, setOptimizedDescription] = useState<string | null>(null)
+  const [optimizeError, setOptimizeError] = useState('')
 
   useEffect(() => {
     const supabase = createClient()
@@ -134,7 +140,39 @@ export default function PostJobPage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleOptimize = async () => {
+    setOptimizeError('')
+    setOptimizing(true)
+    try {
+      const res = await fetch('/api/jobs/optimize-jd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          job_type: form.job_type,
+          location: form.location,
+          remote: form.remote,
+          min_experience: form.min_experience,
+          skills: form.skills,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to optimize description')
+      setOptimizedDescription(data.description)
+    } catch (err: unknown) {
+      setOptimizeError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setOptimizing(false)
+    }
+  }
+
+  const acceptOptimized = () => {
+    if (optimizedDescription) setForm(f => ({ ...f, description: optimizedDescription }))
+    setOptimizedDescription(null)
+  }
+
+  const handleReview = (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -149,6 +187,11 @@ export default function PostJobPage() {
       return setError(`You've used all ${quota.total} job postings.`)
     }
 
+    setStep('preview')
+  }
+
+  const handlePublish = async () => {
+    setError('')
     setLoading(true)
     try {
       const res = await fetch('/api/jobs/create', {
@@ -185,6 +228,85 @@ export default function PostJobPage() {
   const seniorityChips = skillLayers.seniority.filter(s => !form.skills.includes(s))
   const hasChips = domainChips.length > 0 || seniorityChips.length > 0
 
+  const formatSalary = () => {
+    const min = form.salary_min ? parseInt(form.salary_min) : null
+    const max = form.salary_max ? parseInt(form.salary_max) : null
+    if (!min && !max) return null
+    const fmt = (n: number) => form.salary_currency === 'INR' ? `₹${(n / 100000).toFixed(1)}L` : `${form.salary_currency} ${n.toLocaleString()}`
+    if (min && max) return `${fmt(min)} – ${fmt(max)} / year`
+    if (min) return `From ${fmt(min)} / year`
+    return `Up to ${fmt(max!)} / year`
+  }
+
+  if (step === 'preview') {
+    const salary = formatSalary()
+    return (
+      <div className="max-w-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Preview</h1>
+          <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
+            This is exactly how candidates will see it
+          </span>
+        </div>
+
+        <div className="bg-white rounded-2xl border p-6 mb-5">
+          <h2 className="text-2xl font-bold mb-3" style={{ fontFamily: 'var(--font-display)' }}>{form.title || 'Untitled role'}</h2>
+
+          <div className="flex flex-wrap gap-2 mb-6">
+            <span className="text-sm px-3 py-1 rounded-full bg-gray-100 capitalize">{form.job_type.replace('_', '-')}</span>
+            <span className="text-sm px-3 py-1 rounded-full bg-gray-100">📍 {form.location || 'Location not set'}</span>
+            {form.remote && (
+              <span className="text-sm px-3 py-1 rounded-full text-blue-700" style={{ background: 'var(--accent-light)' }}>Remote OK</span>
+            )}
+            {salary && (
+              <span className="text-sm px-3 py-1 rounded-full bg-green-50 text-green-700">💰 {salary}</span>
+            )}
+          </div>
+
+          {form.skills.length > 0 && (
+            <div className="mb-6">
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--muted)' }}>Skills</p>
+              <div className="flex flex-wrap gap-2">
+                {form.skills.map(s => (
+                  <span key={s} className="text-sm px-3 py-1 rounded-full border bg-gray-50">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t pt-6">
+            <p className="text-xs font-semibold uppercase tracking-wide mb-4" style={{ color: 'var(--muted)' }}>About this role</p>
+            <div className="prose prose-sm max-w-none text-sm" dangerouslySetInnerHTML={{ __html: form.description }} />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">{error}</p>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={loading}
+            className="px-6 py-2.5 rounded-lg font-semibold text-white text-sm transition-colors"
+            style={{ background: loading ? 'var(--muted)' : 'var(--accent)' }}
+          >
+            {loading ? 'Publishing…' : 'Publish job →'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep('form')}
+            disabled={loading}
+            className="px-6 py-2.5 rounded-lg text-sm border hover:bg-gray-50"
+          >
+            ← Back to edit
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-6">
@@ -198,7 +320,7 @@ export default function PostJobPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-2xl border p-6">
+      <form onSubmit={handleReview} className="space-y-5 bg-white rounded-2xl border p-6">
 
         {/* Job title */}
         {field('Job title *',
@@ -245,13 +367,54 @@ export default function PostJobPage() {
         )}
 
         {/* Description */}
-        {field('Job description * (min 100 chars)',
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium">Job description * (min 100 chars)</label>
+            <button
+              type="button"
+              onClick={handleOptimize}
+              disabled={optimizing || !form.title.trim()}
+              className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors disabled:opacity-50"
+              style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}
+            >
+              {optimizing ? 'Optimizing…' : '✨ Optimize with AI'}
+            </button>
+          </div>
           <RichTextEditor
             value={form.description}
             onChange={description => setForm(f => ({ ...f, description }))}
             placeholder="Describe the role, responsibilities, and requirements…"
           />
-        )}
+          {optimizeError && (
+            <p className="text-xs mt-1" style={{ color: '#DC2626' }}>{optimizeError}</p>
+          )}
+          {optimizedDescription && (
+            <div className="mt-3 border rounded-lg p-4" style={{ borderColor: 'var(--accent)', background: 'var(--accent-light)' }}>
+              <p className="text-xs font-semibold mb-2" style={{ color: 'var(--accent)' }}>AI suggestion — review before applying</p>
+              <div
+                className="prose prose-sm max-w-none text-sm bg-white rounded-lg p-3 mb-3"
+                dangerouslySetInnerHTML={{ __html: optimizedDescription }}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={acceptOptimized}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  Use this version
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOptimizedDescription(null)}
+                  className="text-xs px-3 py-1.5 rounded-lg border bg-white"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Min experience + Role domain — side by side */}
         <div className="grid grid-cols-2 gap-4">
@@ -443,11 +606,10 @@ export default function PostJobPage() {
         <div className="flex gap-3 pt-2">
           <button
             type="submit"
-            disabled={loading}
             className="px-6 py-2.5 rounded-lg font-semibold text-white text-sm transition-colors"
-            style={{ background: loading ? 'var(--muted)' : 'var(--accent)' }}
+            style={{ background: 'var(--accent)' }}
           >
-            {loading ? 'Posting…' : 'Publish job →'}
+            Preview →
           </button>
           <button
             type="button"
