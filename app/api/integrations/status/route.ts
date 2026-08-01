@@ -11,7 +11,7 @@ import { INTEGRATIONS } from '@/lib/integrations/registry'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const { companyId } = await requireCompany()
+  const { companyId, company } = await requireCompany()
   const supabase = createServiceClient()
 
   const { data: configs } = await supabase
@@ -37,6 +37,7 @@ export async function GET() {
       region: def.region,
       description: def.description,
       docs_url: def.docs_url,
+      key_help_text: def.key_help_text,
       feed_path: def.feed_path,
       quick_url: def.quick_url,
       key2_label: def.key2_label,
@@ -50,5 +51,8 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ integrations: statuses })
+  return NextResponse.json({
+    integrations: statuses,
+    company: { name: company.name, slug: (company as any).slug ?? null },
+  })
 }

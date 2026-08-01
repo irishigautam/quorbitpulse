@@ -56,7 +56,6 @@ export default function PostJobPage() {
     salary_max: '',
     salary_currency: 'INR',
     description: '',
-    apply_method: 'url',
     apply_url: '',
     apply_email: '',
   })
@@ -143,8 +142,9 @@ export default function PostJobPage() {
     if (!form.location.trim()) return setError('Location is required.')
     const descText = form.description.replace(/<[^>]*>/g, '').trim()
     if (descText.length < 100) return setError('Job description must be at least 100 characters.')
-    if (form.apply_method === 'url' && !form.apply_url.trim()) return setError('Apply URL is required.')
-    if (form.apply_method === 'email' && !form.apply_email.trim()) return setError('Apply email is required.')
+    // Candidates always apply on Pulse (so AI scoring has real profile data
+    // to work with) — apply_url/apply_email are optional supplementary
+    // channels only, never required.
     if (quota && quota.used >= quota.total) {
       return setError(`You've used all ${quota.total} job postings.`)
     }
@@ -404,37 +404,25 @@ export default function PostJobPage() {
 
         {/* Apply */}
         <div>
-          <label className="block text-sm font-medium mb-2">How to apply *</label>
-          <div className="flex gap-4 mb-2">
-            {(['url', 'email'] as const).map(method => (
-              <label key={method} className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  value={method}
-                  checked={form.apply_method === method}
-                  onChange={() => setForm(f => ({ ...f, apply_method: method }))}
-                />
-                {method === 'url' ? 'Link (URL)' : 'Email'}
-              </label>
-            ))}
+          <div className="rounded-lg px-3 py-2 mb-3 text-sm" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
+            Candidates always apply directly on Pulse — that's what powers AI scoring and the pipeline. The fields below are optional extra channels only.
           </div>
-          {form.apply_method === 'url' ? (
-            <input
-              type="url"
-              value={form.apply_url}
-              onChange={e => setForm(f => ({ ...f, apply_url: e.target.value }))}
-              placeholder="https://acme.com/jobs/apply"
-              className={inputClass}
-            />
-          ) : (
-            <input
-              type="email"
-              value={form.apply_email}
-              onChange={e => setForm(f => ({ ...f, apply_email: e.target.value }))}
-              placeholder="careers@acme.com"
-              className={inputClass}
-            />
-          )}
+          <label className="block text-sm font-medium mb-1">Also accepts applications via a link (optional)</label>
+          <input
+            type="url"
+            value={form.apply_url}
+            onChange={e => setForm(f => ({ ...f, apply_url: e.target.value }))}
+            placeholder="https://acme.com/jobs/apply"
+            className={inputClass}
+          />
+          <label className="block text-sm font-medium mb-1 mt-3">Also accepts applications via email (optional)</label>
+          <input
+            type="email"
+            value={form.apply_email}
+            onChange={e => setForm(f => ({ ...f, apply_email: e.target.value }))}
+            placeholder="careers@acme.com"
+            className={inputClass}
+          />
         </div>
 
         {/* Expiry */}

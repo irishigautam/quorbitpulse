@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function JobActionsClient({ jobId, status }: { jobId: string; status: string }) {
   const router = useRouter()
@@ -19,15 +20,23 @@ export default function JobActionsClient({ jobId, status }: { jobId: string; sta
     setLoading(false)
   }
 
-  if (status === 'expired') return null
-
   return (
-    <button
-      onClick={handleExpire}
-      disabled={loading}
-      className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-    >
-      {loading ? 'Expiring…' : 'Expire listing'}
-    </button>
+    <>
+      <Link
+        href={`/dashboard/jobs/${jobId}/edit`}
+        className="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 transition-colors"
+      >
+        Edit
+      </Link>
+      {status !== 'expired' && (
+        <button
+          onClick={handleExpire}
+          disabled={loading}
+          className="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          {loading ? 'Expiring…' : 'Expire listing'}
+        </button>
+      )}
+    </>
   )
 }

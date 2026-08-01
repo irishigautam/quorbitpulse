@@ -14,6 +14,7 @@ import type { MemberRole } from '@/lib/auth'
 export type AuditAction =
   | 'job.create'
   | 'job.expire'
+  | 'job.edit'
   | 'job.retry_distribution'
   | 'member.invite'
   | 'member.invite_revoke'

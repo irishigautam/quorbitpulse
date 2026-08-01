@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { after } from 'next/server'
 import CopyLinkButton from './CopyLinkButton'
+import ApplyButton from './ApplyButton'
 import { jobIdFromSlug, jobSlug } from '@/types'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -235,24 +236,23 @@ export default async function JobPage({ params }: Props) {
                 <h2 className="font-semibold mb-3" style={{ fontFamily: 'var(--font-display)' }}>
                   Apply for this role
                 </h2>
-                {job.apply_url ? (
-                  <a
-                    href={job.apply_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full py-3 rounded-xl text-center font-semibold text-white text-sm"
-                    style={{ background: 'var(--accent)' }}
-                  >
-                    Apply now →
-                  </a>
-                ) : (
-                  <a
-                    href={`mailto:${job.apply_email}?subject=Application for ${encodeURIComponent(job.title)}`}
-                    className="block w-full py-3 rounded-xl text-center font-semibold text-white text-sm"
-                    style={{ background: 'var(--accent)' }}
-                  >
-                    Send application email →
-                  </a>
+                <ApplyButton jobId={job.id} jobSlug={p.slug} />
+
+                {(job.apply_url || job.apply_email) && (
+                  <div className="mt-3 pt-3 border-t text-xs text-center" style={{ color: 'var(--muted)' }}>
+                    Also accepts applications{' '}
+                    {job.apply_url && (
+                      <a href={job.apply_url} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: 'var(--accent)' }}>
+                        via this link
+                      </a>
+                    )}
+                    {job.apply_url && job.apply_email && ' or '}
+                    {job.apply_email && (
+                      <a href={`mailto:${job.apply_email}?subject=Application for ${encodeURIComponent(job.title)}`} className="underline" style={{ color: 'var(--accent)' }}>
+                        via email
+                      </a>
+                    )}
+                  </div>
                 )}
 
                 {/* Share */}

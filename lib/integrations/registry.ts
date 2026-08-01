@@ -28,6 +28,13 @@ export interface IntegrationDef {
   quick_url?: string
   /** Link to the portal's developer/API docs */
   docs_url?: string
+  /**
+   * For api_key type: most of these portals don't have a public self-serve
+   * "generate API key" page — access is issued by an account manager, not a
+   * URL. Rather than link to a guessed page that 404s, show this text
+   * instead of a "Get key" link when set.
+   */
+  key_help_text?: string
   available: boolean    // false = coming soon
   /**
    * Managed mode: Quorbit posts on behalf of companies using platform-level
@@ -105,7 +112,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     connection_type: 'api_key',
     region: ['india'],
     key2_label: 'Client ID',
-    docs_url: 'https://recruiter.naukri.com',
+    key_help_text: 'API access is issued by your Naukri account manager, not a self-serve page — ask them for a RecruiterAPI key + Client ID.',
     available: true,
     supports_managed: true,
     env_key: 'NAUKRI_API_KEY',
@@ -119,7 +126,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     connection_type: 'api_key',
     region: ['india'],
     key2_label: 'Recruiter ID',
-    docs_url: 'https://www.shine.com/recruiter',
+    key_help_text: 'API access is issued by your Shine account manager, not a self-serve page — ask them for an API key + Recruiter ID.',
     available: true,
     supports_managed: true,
     env_key: 'SHINE_API_KEY',
@@ -133,7 +140,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     connection_type: 'api_key',
     region: ['india'],
     key2_label: 'Partner ID',
-    docs_url: 'https://www.timesjobs.com/employer',
+    key_help_text: 'API access is issued by your TimesJobs partner manager, not a self-serve page — ask them for an API key + Partner ID.',
     available: true,
     supports_managed: true,
     env_key: 'TIMESJOBS_API_KEY',
@@ -147,7 +154,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     connection_type: 'api_key',
     region: ['india'],
     key2_label: 'Recruiter ID',
-    docs_url: 'https://www.foundit.in/seeker/recruiter',
+    key_help_text: 'API access is issued by your Foundit account manager, not a self-serve page — ask them for an API key + Recruiter ID.',
     available: true,
     supports_managed: true,
     env_key: 'FOUNDIT_API_KEY',
@@ -161,7 +168,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     connection_type: 'api_key',
     region: ['global'],
     key2_label: 'Partner ID',
-    docs_url: 'https://www.ziprecruiter.com/partner',
+    key_help_text: 'API access requires a ZipRecruiter partner agreement, not a self-serve page — contact their partnerships team for an API key + Partner ID.',
     available: true,
     supports_managed: true,
     env_key: 'ZIPRECRUITER_API_KEY',

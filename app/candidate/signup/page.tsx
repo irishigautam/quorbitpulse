@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function CandidateSignupPage() {
+function CandidateSignupContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo')
   const [form, setForm] = useState({ full_name: '', email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -59,7 +61,7 @@ export default function CandidateSignupPage() {
       body: JSON.stringify({ eventType: 'candidate_signup', entityId: authData.user.id }),
     }).catch(() => {})
 
-    router.push('/candidate/dashboard')
+    router.push(redirectTo || '/candidate/dashboard')
   }
 
   return (
@@ -112,8 +114,19 @@ export default function CandidateSignupPage() {
       </form>
 
       <p style={{ marginTop: '1.5rem', fontSize: '0.85rem', color: 'var(--muted)', textAlign: 'center' }}>
-        Already have a profile? <a href="/candidate/login" style={{ color: 'var(--primary)' }}>Log in</a>
+        Already have a profile?{' '}
+        <a href={redirectTo ? `/candidate/login?redirectTo=${encodeURIComponent(redirectTo)}` : '/candidate/login'} style={{ color: 'var(--primary)' }}>
+          Log in
+        </a>
       </p>
     </div>
+  )
+}
+
+export default function CandidateSignupPage() {
+  return (
+    <Suspense fallback={<div style={{ maxWidth: '420px', margin: '4rem auto', color: 'var(--muted)' }}>Loading…</div>}>
+      <CandidateSignupContent />
+    </Suspense>
   )
 }

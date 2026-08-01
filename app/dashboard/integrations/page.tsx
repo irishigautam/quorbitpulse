@@ -5,6 +5,15 @@ import { useSearchParams } from 'next/navigation'
 
 const APP_URL = typeof window !== 'undefined' ? window.location.origin : ''
 
+// NEXT_PUBLIC_* vars are inlined at build time, so we can check these
+// client-side to gray out an OAuth Connect button up front instead of
+// letting the user click it and hit a toast error after the fact.
+function oauthConfigured(id: string): boolean {
+  if (id === 'linkedin') return !!process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID
+  if (id === 'wellfound') return !!process.env.NEXT_PUBLIC_WELLFOUND_CLIENT_ID
+  return true
+}
+
 interface Integration {
   id: string
   name: string
@@ -14,6 +23,7 @@ interface Integration {
   connection_type: 'oauth' | 'api_key' | 'feed' | 'quick'
   region: string[]
   docs_url?: string
+  key_help_text?: string
   feed_path?: string
   quick_url?: string
   key2_label?: string
@@ -29,6 +39,7 @@ interface Integration {
 function IntegrationsContent() {
   const searchParams = useSearchParams()
   const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [companySlug, setCompanySlug] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [filter, setFilter] = useState<'all' | 'connected' | 'india' | 'global'>('all')
@@ -55,6 +66,7 @@ function IntegrationsContent() {
       })
       .then(d => {
         setIntegrations(d.integrations ?? [])
+        setCompanySlug(d.company?.slug ?? null)
         setLoading(false)
       })
       .catch(() => {
@@ -258,6 +270,7 @@ function IntegrationsContent() {
               onDisconnect={() => handleDisconnect(integ.id)}
               onToggleManaged={(enable) => handleToggleManaged(integ.id, enable)}
               appUrl={APP_URL}
+              companySlug={companySlug}
             />
           ))}
         </div>
@@ -291,6 +304,7 @@ function IntegrationCard({
   onDisconnect,
   onToggleManaged,
   appUrl,
+  companySlug,
 }: {
   integ: Integration
   isExpanded: boolean
@@ -303,12 +317,26 @@ function IntegrationCard({
   onDisconnect: () => void
   onToggleManaged: (enable: boolean) => void
   appUrl: string
+  companySlug: string | null
 }) {
   const isConnected = integ.status === 'connected'
   const isFeed = integ.connection_type === 'feed'
   const feedUrl = integ.feed_path ? `${appUrl}${integ.feed_path}` : ''
   const isDualMode = integ.supports_managed && integ.managed_available && integ.connection_type === 'api_key'
   const badge = statusBadge(integ)
+
+  // Quick-post URL: fill {title}/{location} with a generic placeholder (this
+  // launcher isn't tied to one specific job) and {company} with the real
+  // company slug — leaving {company} blank produced a malformed path like
+  // wellfound.com/company//jobs/new, which 404s every time.
+  const quickPostUrl = integ.quick_url
+    ? integ.quick_url
+        .replace('{title}', encodeURIComponent('Job Opening'))
+        .replace('{company}', encodeURIComponent(companySlug ?? ''))
+        .replace('{location}', '')
+        .replace('{description}', '')
+    : '#'
+  const quickPostDisabled = integ.quick_url?.includes('{company}') && !companySlug
 
   return (
     <div style={{
@@ -502,13 +530,15 @@ function IntegrationCard({
                     >
                       Cancel
                     </button>
-                    {integ.docs_url && (
-                      <a href={integ.docs_url} target="_blank" rel="noreferrer"
-                        style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, fontSize: '0.8rem', textDecoration: 'none', color: 'inherit' }}>
-                        Get key ↗
-                      </a>
-                    )}
                   </div>
+                  {integ.key_help_text ? (
+                    <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>{integ.key_help_text}</p>
+                  ) : integ.docs_url && (
+                    <a href={integ.docs_url} target="_blank" rel="noreferrer"
+                      style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>
+                      Get key ↗
+                    </a>
+                  )}
                 </div>
               ) : (
                 <button
@@ -573,14 +603,30 @@ function IntegrationCard({
                 Disconnect
               </button>
             ) : integ.connection_type === 'quick' ? (
-              <a
-                href={integ.quick_url?.replace('{title}', 'Job Opening').replace('{company}', '').replace('{location}', '').replace('{description}', '') ?? '#'}
-                target="_blank"
-                rel="noreferrer"
-                style={{ display: 'inline-block', padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+              quickPostDisabled ? (
+                <span
+                  title="We couldn't determine your company's page slug — try again from your dashboard."
+                  style={{ display: 'inline-block', padding: '0.4rem 0.875rem', background: '#F3F4F6', color: '#9CA3AF', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, cursor: 'not-allowed' }}
+                >
+                  Quick Post (unavailable)
+                </span>
+              ) : (
+                <a
+                  href={quickPostUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: 'inline-block', padding: '0.4rem 0.875rem', background: integ.color, color: '#fff', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+                >
+                  Quick Post ↗
+                </a>
+              )
+            ) : integ.connection_type === 'oauth' && !oauthConfigured(integ.id) ? (
+              <span
+                title="This integration's OAuth app isn't configured yet — contact your admin."
+                style={{ padding: '0.4rem 0.875rem', background: '#F3F4F6', color: '#9CA3AF', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, cursor: 'not-allowed' }}
               >
-                Quick Post ↗
-              </a>
+                Not yet available
+              </span>
             ) : (
               <button
                 onClick={onConnect}

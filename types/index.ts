@@ -75,7 +75,12 @@ export interface PostJobFormValues {
   salary_max: string
   salary_currency: string
   description: string
-  apply_method: 'url' | 'email'
+  // Candidates always apply on-platform (via /api/candidate/apply) so every
+  // application carries real profile data for AI scoring — an external
+  // apply_url/mailto bypass would mean no candidate record, no fingerprint,
+  // and no score. These are now purely optional supplementary channels an
+  // employer may also list (e.g. "or email us directly"), never a
+  // requirement, and never the primary apply action shown to candidates.
   apply_url: string
   apply_email: string
 }

@@ -8,6 +8,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { jobSlug } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -145,7 +146,7 @@ export default async function CompanyPublicPage({ params }: Props) {
             {openJobs.map(job => (
               <Link
                 key={job.id}
-                href={`/jobs/${job.id}`}
+                href={`/jobs/${jobSlug(job)}`}
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
                 <div style={{

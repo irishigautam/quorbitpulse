@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function CandidateLoginPage() {
+function CandidateLoginContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirectTo')
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -27,7 +29,7 @@ export default function CandidateLoginPage() {
       return
     }
 
-    router.push('/candidate/dashboard')
+    router.push(redirectTo || '/candidate/dashboard')
   }
 
   return (
@@ -69,8 +71,19 @@ export default function CandidateLoginPage() {
       </form>
 
       <p style={{ marginTop: '1.5rem', fontSize: '0.85rem', color: 'var(--muted)', textAlign: 'center' }}>
-        New to Quorbit? <a href="/candidate/signup" style={{ color: 'var(--primary)' }}>Create profile</a>
+        New to Quorbit?{' '}
+        <a href={redirectTo ? `/candidate/signup?redirectTo=${encodeURIComponent(redirectTo)}` : '/candidate/signup'} style={{ color: 'var(--primary)' }}>
+          Create profile
+        </a>
       </p>
     </div>
+  )
+}
+
+export default function CandidateLoginPage() {
+  return (
+    <Suspense fallback={<div style={{ maxWidth: '420px', margin: '4rem auto', color: 'var(--muted)' }}>Loading…</div>}>
+      <CandidateLoginContent />
+    </Suspense>
   )
 }

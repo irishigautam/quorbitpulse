@@ -45,8 +45,10 @@ export async function POST(req: NextRequest) {
       salary_min: form.salary_min ? parseInt(form.salary_min) : null,
       salary_max: form.salary_max ? parseInt(form.salary_max) : null,
       salary_currency: form.salary_currency,
-      apply_url: form.apply_method === 'url' ? form.apply_url : null,
-      apply_email: form.apply_method === 'email' ? form.apply_email : null,
+      // Optional supplementary channels only — candidates always apply
+      // on-platform via /api/candidate/apply regardless of these.
+      apply_url: form.apply_url?.trim() ? form.apply_url.trim() : null,
+      apply_email: form.apply_email?.trim() ? form.apply_email.trim() : null,
       status: 'active',
       expires_at: expiresAt.toISOString(),
     })
