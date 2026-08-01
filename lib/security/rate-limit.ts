@@ -133,6 +133,12 @@ export const LIMITS = {
   /** LLM-export consent request: 10 / hour / company (Resend quota protection) */
   requestConsent: (companyId: string) =>
     rateLimit(companyId, { windowMs: 60 * 60_000, max: 10, keyPrefix: 'consent-request' }),
+
+  /** Public metered matching API (/api/v1/match): 300 / hour / company.
+   *  This is the one publicly reachable, billed endpoint that previously had
+   *  no rate limit at all despite every other metered route having one. */
+  publicMatch: (companyId: string) =>
+    rateLimit(companyId, { windowMs: 60 * 60_000, max: 300, keyPrefix: 'v1-match' }),
 } as const
 
 /** Build a 429 Response with standard rate-limit headers */

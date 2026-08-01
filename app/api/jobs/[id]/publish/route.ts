@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse, after } from 'next/server'
 import { requireRole } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { pingGoogleIndexing } from '@/lib/google-indexing'
 import { sendJobPostedEmail } from '@/lib/emails'
 import { distributeJob } from '@/lib/distribution'
@@ -32,6 +32,13 @@ export async function POST(
   const supabase = await createClient()
 
   if (!company.plan_active) return NextResponse.json({ error: 'Plan not active' }, { status: 403 })
+
+  // NOTE: this is a fast-path rejection only, using the possibly-stale
+  // `company.jobs_used` from requireRole()'s earlier read. It exists purely
+  // to short-circuit an obviously-over-quota request before doing any other
+  // work. The actual enforcement happens atomically further below via
+  // try_increment_job_quota() - do not rely on this check alone, since two
+  // concurrent requests can both read the same stale value and both pass it.
   if (company.jobs_used >= company.jobs_quota) {
     return NextResponse.json({ error: 'Job quota exceeded' }, { status: 403 })
   }
@@ -66,6 +73,17 @@ export async function POST(
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 60)
 
+  // Atomically check-and-increment quota as a single DB statement (see
+  // migration 025 / try_increment_job_quota) instead of the previous
+  // read-then-write, which raced under concurrent publish requests. This
+  // reserves the quota slot before the job is actually published; if the
+  // publish update below fails, the reservation is released.
+  const serviceClient = createServiceClient()
+  const { data: quotaOk } = await serviceClient.rpc('try_increment_job_quota', { p_company_id: company.id })
+  if (!quotaOk) {
+    return NextResponse.json({ error: 'Job quota exceeded' }, { status: 403 })
+  }
+
   const { data: job, error } = await supabase
     .from('jobs')
     .update({
@@ -79,13 +97,11 @@ export async function POST(
     .single()
 
   if (error || !job) {
+    // Release the quota slot we reserved above - otherwise a failed publish
+    // permanently burns one unit of the company's quota for nothing.
+    await serviceClient.rpc('decrement_job_quota', { p_company_id: company.id })
     return NextResponse.json({ error: 'Failed to publish job' }, { status: 500 })
   }
-
-  await supabase
-    .from('companies')
-    .update({ jobs_used: company.jobs_used + 1 })
-    .eq('id', company.id)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
   const slug = jobSlug(job)

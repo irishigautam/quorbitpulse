@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 declare global {
   interface Window {
@@ -22,8 +22,6 @@ interface RazorpayOptions {
 
 function PaymentContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const isDev = searchParams.get('dev') === '1'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [scriptLoaded, setScriptLoaded] = useState(false)
@@ -36,23 +34,13 @@ function PaymentContent() {
     return () => { document.body.removeChild(script) }
   }, [])
 
-  const handleDevActivate = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch('/api/payments/dev-activate', { method: 'POST' })
-      if (res.ok) {
-        router.push('/dashboard?welcome=1')
-      } else {
-        const j = await res.json()
-        setError(j.error ?? 'Dev activate failed')
-      }
-    } catch {
-      setError('Something went wrong.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // The dev-only "skip payment" button and its backing /api/payments/dev-activate
+  // route were removed - the route always returned 403 (it was a security fix
+  // after realizing a leaked DEV_PAYMENT_BYPASS env var would let any
+  // authenticated user activate any plan for free), so the button was already
+  // permanently broken. Left as a stale dead route + dead button, it was still
+  // attack surface someone could poke at. Use Razorpay test mode + the coupon
+  // code flow for testing instead.
 
   const handlePayment = async () => {
     if (!scriptLoaded) return setError('Payment system loading, please wait.')
@@ -159,21 +147,6 @@ function PaymentContent() {
           Secure payment via Razorpay. Instant activation.
         </p>
 
-        {isDev && (
-          <div className="mt-6 pt-5 border-t">
-            <p className="text-xs text-center mb-3 font-mono" style={{ color: 'var(--muted)' }}>
-              ⚙️ Dev mode — skip payment
-            </p>
-            <button
-              onClick={handleDevActivate}
-              disabled={loading}
-              className="w-full py-2 rounded-lg font-medium text-sm border-2 transition-colors"
-              style={{ borderColor: '#059669', color: '#059669' }}
-            >
-              {loading ? 'Activating…' : 'Activate without payment (dev only)'}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )

@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       .from('candidate_profiles')
       .select('*')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (!candidateRow) {
       return NextResponse.json({ error: 'not_authenticated' }, { status: 401 })
@@ -59,11 +59,15 @@ export async function POST(req: NextRequest) {
       .from('jobs')
       .select('id, title, company_id, status, domain, skills, min_experience')
       .eq('id', job_id)
-      .single()
+      .maybeSingle()
 
     if (jobErr || !job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
+    // Fast-path rejection only, using a snapshot read - not the source of
+    // truth. submit_candidate_application() below re-checks this atomically
+    // (with a row lock) immediately before writing, which is what actually
+    // closes the "job closed/deleted mid-application" race.
     if (job.status !== 'active') {
       return NextResponse.json({ error: 'Job is no longer active' }, { status: 400 })
     }
@@ -84,18 +88,6 @@ export async function POST(req: NextRequest) {
       metadata: { candidate_id: candidate.id },
     })
 
-    // Check for duplicate application
-    const { data: existing } = await supabase
-      .from('candidate_applications')
-      .select('id')
-      .eq('candidate_id', candidate.id)
-      .eq('job_id', job_id)
-      .single()
-
-    if (existing) {
-      return NextResponse.json({ error: 'Already applied to this job' }, { status: 409 })
-    }
-
     // Score using the same weighted engine the recruiter's manual
     // score-batch/blend-scores routes use (lib/scoring/engine.ts), instead
     // of the previous ad hoc inline heuristic — the two scoring paths
@@ -107,7 +99,7 @@ export async function POST(req: NextRequest) {
       .from('candidate_profiles')
       .select('skills, domain, years_experience, seniority, resume_file_path')
       .eq('id', candidate.id)
-      .single()
+      .maybeSingle()
 
     const fingerprint: CandidateFingerprint = {
       domain: candidateData?.domain ?? [],
@@ -124,23 +116,48 @@ export async function POST(req: NextRequest) {
     })
     const matchScore = scoreBreakdown.total
 
-    // Insert application
-    const { data: application, error: appErr } = await supabase
-      .from('candidate_applications')
-      .insert({
-        candidate_id: candidate.id,
-        job_id,
-        company_id,
-        match_score: matchScore,
-        status: 'pending',
-        applied_at: new Date().toISOString(),
+    // The 4 writes below (application insert, imported_candidates
+    // upsert, pipeline assignment upsert, status sync) used to be
+    // sequential, un-transacted Supabase calls: if any write after the
+    // first failed, the candidate had a "successful" application that the
+    // recruiter would never see, with no rollback. submit_candidate_application
+    // (see supabase/migrations/026_transactional_candidate_apply.sql) performs all of them as one atomic Postgres
+    // transaction, and re-checks the job is still active (with a row lock)
+    // immediately before writing - closing the window where a recruiter
+    // could close/delete the job between our first check above and the
+    // actual insert.
+    const { data: rpcResult, error: rpcErr } = await supabase
+      .rpc('submit_candidate_application', {
+        p_candidate_id: candidate.id,
+        p_job_id: job_id,
+        p_company_id: company_id,
+        p_match_score: matchScore,
+        p_score_breakdown: scoreBreakdown,
+        p_candidate_email: candidate.email,
+        p_candidate_full_name: candidate.full_name,
+        p_candidate_current_title: candidate.current_title ?? null,
+        p_candidate_current_company: candidate.current_company ?? null,
+        p_candidate_location: candidate.location ?? null,
+        p_candidate_linkedin_url: candidate.linkedin_url ?? null,
+        p_candidate_skills: candidateData?.skills ?? [],
+        p_candidate_domain: candidateData?.domain ?? [],
+        p_candidate_seniority: candidateData?.seniority ?? null,
+        p_candidate_years_experience: candidateData?.years_experience ?? null,
+        p_candidate_resume_file_path: candidateData?.resume_file_path ?? null,
       })
-      .select()
       .single()
 
-    if (appErr) {
-      return NextResponse.json({ error: appErr.message }, { status: 500 })
+    if (rpcErr) {
+      return NextResponse.json({ error: rpcErr.message }, { status: 500 })
     }
+    if (rpcResult?.job_inactive) {
+      return NextResponse.json({ error: 'Job is no longer active' }, { status: 400 })
+    }
+    if (rpcResult?.duplicate) {
+      return NextResponse.json({ error: 'Already applied to this job' }, { status: 409 })
+    }
+
+    const application = { id: rpcResult!.application_id as string }
 
     await logEvent({
       eventType: 'candidate_applied',
@@ -148,72 +165,6 @@ export async function POST(req: NextRequest) {
       entityId: application.id,
       metadata: { candidate_id: candidate.id, job_id, match_score: matchScore },
     })
-
-    // Also create an imported_candidates + assignment entry on the recruiter side
-    // so the recruiter sees this application in their pipeline
-    const { data: existingImported } = await supabase
-      .from('imported_candidates')
-      .select('id')
-      .eq('email', candidate.email)
-      .eq('company_id', company_id)
-      .single()
-
-    let importedCandidateId = existingImported?.id
-
-    if (!importedCandidateId) {
-      const { data: newImported } = await supabase
-        .from('imported_candidates')
-        .insert({
-          company_id,
-          full_name: candidate.full_name,
-          email: candidate.email,
-          current_title: candidate.current_title,
-          current_company: candidate.current_company,
-          location: candidate.location,
-          linkedin_url: candidate.linkedin_url,
-          import_source: 'direct_apply',
-          skills: candidateData?.skills ?? [],
-          domain: candidateData?.domain ?? [],
-          seniority: candidateData?.seniority,
-          years_experience: candidateData?.years_experience,
-          resume_file_path: candidateData?.resume_file_path ?? null,
-          status: 'new',
-          fingerprint_status: 'done',
-        })
-        .select('id')
-        .single()
-      importedCandidateId = newImported?.id
-    } else if (candidateData?.resume_file_path) {
-      // Existing imported_candidates row (e.g. applying to a second job at
-      // the same company) — keep the resume file reference current.
-      await supabase
-        .from('imported_candidates')
-        .update({ resume_file_path: candidateData.resume_file_path })
-        .eq('id', importedCandidateId)
-    }
-
-    if (importedCandidateId) {
-      // Create pipeline assignment
-      await supabase
-        .from('candidate_job_assignments')
-        .upsert({
-          candidate_id: importedCandidateId,
-          job_id,
-          company_id,
-          pipeline_stage: 'sourced',
-          match_score: matchScore,
-          score_breakdown: scoreBreakdown,
-          scored_at: new Date().toISOString(),
-          tags: ['direct-apply'],
-        }, { onConflict: 'candidate_id,job_id' })
-
-      // Keep imported_candidates.status in sync so this candidate shows as
-      // already scored in the recruiter's candidate pool, not stuck at 'new'.
-      await supabase
-        .from('imported_candidates')
-        .update({ match_score: matchScore, status: 'scored' })
-        .eq('id', importedCandidateId)
-    }
 
     // CJ-05/CJ-07 + EJ-06 (launch checklist) — neither the candidate nor the
     // employer previously got any email signal that an application had just
@@ -225,7 +176,7 @@ export async function POST(req: NextRequest) {
       .from('companies')
       .select('name, careers_email')
       .eq('id', company_id)
-      .single()
+      .maybeSingle()
 
     after(async () => {
       await Promise.allSettled([

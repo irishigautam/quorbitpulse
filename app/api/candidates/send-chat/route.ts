@@ -148,9 +148,12 @@ export async function POST(req: NextRequest) {
           .eq('id', sessionId)
 
         emailSent = true
-      } catch (emailErr) {
-        // Don't fail the whole request if email fails — session is created
-        console.error('Resend email error:', emailErr)
+      } catch (emailErr: any) {
+        // Don't fail the whole request if email fails — session is created.
+        // Log only the error message, not the full error object - Resend
+        // error objects can echo the destination address back, which would
+        // otherwise put a candidate's email into log aggregation unredacted.
+        console.error('Resend email error:', emailErr?.message ?? 'unknown error')
       }
     }
 

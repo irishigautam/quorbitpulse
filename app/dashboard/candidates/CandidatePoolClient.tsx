@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useMemo, useTransition } from 'react'
 import Link from 'next/link'
 import type { ImportedCandidate } from '@/types'
 import type { ScoreBreakdown } from '@/lib/scoring/engine'
@@ -660,9 +660,15 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
   const [batchChatN, setBatchChatN] = useState(5)
   const [batchChatStatus, setBatchChatStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [batchChatResult, setBatchChatResult] = useState<{ sent: number; skipped: number; message?: string } | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState('')
   const [, startTransition] = useTransition()
 
-  const filtered = candidates
+  // Previously this recomputed on every render (including on every keystroke
+  // in the search box) with no memoization - cheap at 50 rows, but still
+  // unnecessary work, and worth fixing now that "load more" (below) means
+  // this array can grow well past 50.
+  const filtered = useMemo(() => candidates
     .filter(c => {
       const q = search.toLowerCase()
       const matchesSearch = !q ||
@@ -677,7 +683,42 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
       if (sortBy === 'blended_score') return (b.blended_score ?? b.match_score ?? -1) - (a.blended_score ?? a.match_score ?? -1)
       if (sortBy === 'match_score') return (b.match_score ?? -1) - (a.match_score ?? -1)
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+    }), [candidates, search, statusFilter, sortBy])
+
+  // Previously the candidate pool only ever fetched the first 50 candidates
+  // (server-side .limit(50), see app/dashboard/candidates/page.tsx) with no
+  // way to see or reach anything beyond that - a company with 200 candidates
+  // permanently only saw the newest 50, and the UI's only suggestion when
+  // more existed was a misleading "Import more" link (importing wouldn't
+  // have surfaced the missing 150; they were never fetched at all). This
+  // calls the existing, already-paginated GET /api/candidates endpoint
+  // (which the dashboard had never actually been wired up to use) to fetch
+  // the next page and append it.
+  async function loadMore() {
+    setLoadingMore(true)
+    setLoadMoreError('')
+    try {
+      const params = new URLSearchParams({
+        offset: String(candidates.length),
+        limit: '50',
+      })
+      if (statusFilter) params.set('status', statusFilter)
+      if (search) params.set('q', search)
+      const res = await fetch(`/api/candidates?${params.toString()}`)
+      const json = await res.json()
+      if (!res.ok) {
+        setLoadMoreError(json.error ?? 'Failed to load more candidates')
+        return
+      }
+      const existingIds = new Set(candidates.map(c => c.id))
+      const next = (json.data ?? []).filter((c: ImportedCandidate) => !existingIds.has(c.id))
+      setCandidates(prev => [...prev, ...next])
+    } catch {
+      setLoadMoreError('Network error loading more candidates')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   async function handleAssign() {
     if (!assignTarget || !selectedJob) return
@@ -1174,14 +1215,22 @@ export default function CandidatePoolClient({ initialCandidates, activeJobs, tot
           </table>
         </div>
 
-        {filtered.length > 0 && filtered.length < total && (
+        {filtered.length > 0 && candidates.length < total && (
           <div className="px-4 py-3 border-t text-center">
-            <p className="text-xs" style={{ color: 'var(--muted)' }}>
-              Showing {filtered.length} of {total} candidates.{' '}
-              <Link href="/dashboard/candidates/import" className="underline" style={{ color: 'var(--accent)' }}>
-                Import more →
-              </Link>
+            <p className="text-xs mb-2" style={{ color: 'var(--muted)' }}>
+              Showing {candidates.length} of {total} candidates.
             </p>
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold border"
+              style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+            >
+              {loadingMore ? 'Loading…' : `Load ${Math.min(50, total - candidates.length)} more`}
+            </button>
+            {loadMoreError && (
+              <p className="text-xs mt-2" style={{ color: '#991B1B' }}>{loadMoreError}</p>
+            )}
           </div>
         )}
       </div>

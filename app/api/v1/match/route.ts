@@ -40,6 +40,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { createHash } from 'crypto'
+import { computeMatchScore } from '@/lib/scoring/engine'
+import { LIMITS, rateLimitResponse } from '@/lib/security/rate-limit'
+import { publicApiHeaders, corsPreflight } from '@/lib/api/cors'
+import type { CandidateFingerprint } from '@/lib/scoring/fingerprint'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,49 +58,52 @@ async function resolveApiKey(authHeader: string | null): Promise<{ company_id: s
     .from('api_keys')
     .select('company_id')
     .eq('key_hash', keyHash)
-    .single()
+    .maybeSingle()
 
   return data ?? null
 }
 
 // ---- Matching logic ----
-function scoreMatch(candidate: any, job: any): {
-  match_score: number
-  breakdown: { skill_score: number; domain_score: number; experience_score: number; seniority_score: number }
-} {
-  const candidateSkills = new Set((candidate.skills ?? []).map((s: string) => s.toLowerCase()))
-  const candidateDomain = new Set((candidate.domain ?? []).map((d: string) => d.toLowerCase()))
-  const jobSkills  = (job.skills  ?? []).map((s: string) => s.toLowerCase())
-  const jobDomain  = (job.domain  ?? []).map((d: string) => d.toLowerCase())
-
-  const skillScore = jobSkills.length
-    ? Math.round((jobSkills.filter((s: string) => candidateSkills.has(s)).length / jobSkills.length) * 100)
-    : 50
-
-  const domainScore = jobDomain.length
-    ? Math.round((jobDomain.filter((d: string) => candidateDomain.has(d)).length / jobDomain.length) * 100)
-    : 50
-
-  const candidateYoe = candidate.years_experience ?? null
-  const jobMinYoe    = job.min_experience ?? null
-  const experienceScore = (candidateYoe !== null && jobMinYoe !== null)
-    ? Math.max(0, Math.min(100, Math.round(100 - Math.abs(candidateYoe - jobMinYoe) * 10)))
-    : 50
-
-  const SENIORITY_RANK: Record<string, number> = {
-    intern: 0, junior: 1, mid: 2, senior: 3, lead: 4, principal: 5
+// Previously this route had its own hand-rolled scoring formula (skill/domain/
+// experience/seniority weighted 45/30/15/10) that disagreed with the scoring
+// used everywhere else in the product (lib/scoring/engine.ts, weighted
+// 25/30/20/25 with domain-adjacency and seniority-gap logic). Two scoring
+// engines for the same product meant a candidate could get a materially
+// different score depending on which endpoint scored them. This route now
+// calls the same shared engine as the dashboard/apply flow so there is one
+// source of truth. Response field names are kept the same as before
+// (skill_score/domain_score/experience_score/seniority_score/match_score) so
+// existing public API consumers don't see a breaking shape change.
+function scoreMatch(candidate: any, job: any) {
+  const fingerprint: CandidateFingerprint = {
+    domain: candidate.domain ?? [],
+    seniority: candidate.seniority ?? null,
+    skills: candidate.skills ?? [],
+    years_experience: candidate.years_experience ?? null,
+    summary: '',
   }
-  const candRank = SENIORITY_RANK[candidate.seniority ?? ''] ?? -1
-  const jobRank  = SENIORITY_RANK[job.seniority ?? ''] ?? -1
-  const seniorityScore = (candRank >= 0 && jobRank >= 0)
-    ? Math.max(0, 100 - Math.abs(candRank - jobRank) * 25)
-    : 50
-
-  const match_score = Math.round(
-    skillScore * 0.45 + domainScore * 0.30 + experienceScore * 0.15 + seniorityScore * 0.10
-  )
-
-  return { match_score, breakdown: { skill_score: skillScore, domain_score: domainScore, experience_score: experienceScore, seniority_score: seniorityScore } }
+  const breakdown = computeMatchScore(fingerprint, {
+    domain: job.domain ?? [],
+    skills: job.skills ?? [],
+    min_experience: job.min_experience ?? 0,
+  })
+  return {
+    match_score: breakdown.total,
+    breakdown: {
+      skill_score: breakdown.skill_score,
+      domain_score: breakdown.domain_score,
+      experience_score: breakdown.yoe_score,
+      seniority_score: breakdown.seniority_score,
+    },
+    // Additive fields (safe for existing consumers to ignore) - the same
+    // evidence shown in the dashboard, so the public API gives the same
+    // level of transparency the app does.
+    evidence: {
+      matched_skills: breakdown.matched_skills,
+      missing_skills: breakdown.missing_skills,
+      domain_match_type: breakdown.domain_match_type,
+    },
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -105,14 +112,26 @@ export async function POST(req: NextRequest) {
     const keyData = await resolveApiKey(authHeader)
 
     if (!keyData) {
-      return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Invalid or missing API key' },
+        { status: 401, headers: publicApiHeaders() },
+      )
     }
+
+    // This was the one metered, publicly reachable route with zero rate
+    // limiting (score-batch, import, etc. all have one) - a single leaked or
+    // guessed-adjacent key could otherwise be hammered without limit.
+    const limit = LIMITS.publicMatch(keyData.company_id)
+    if (!limit.allowed) return rateLimitResponse(limit)
 
     const body = await req.json()
     const { candidate, job } = body
 
     if (!candidate || !job) {
-      return NextResponse.json({ error: 'candidate and job fields are required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'candidate and job fields are required' },
+        { status: 400, headers: publicApiHeaders() },
+      )
     }
 
     // Enrich job if description provided but no skills/domain
@@ -143,10 +162,19 @@ export async function POST(req: NextRequest) {
       metadata: { source: 'public_api_v1', job_title: job.title },
     })
 
-    return NextResponse.json({ ...result, api_version: 'v1' })
+    return NextResponse.json(
+      { ...result, api_version: 'v1' },
+      { headers: publicApiHeaders() },
+    )
   } catch (err: any) {
-    console.error('v1 match error:', err)
-    return NextResponse.json({ error: err.message ?? 'Match failed' }, { status: 500 })
+    // Don't log the raw error object here - for this route it can carry the
+    // caller's candidate/job payload (PII) via err.message on JSON parse
+    // failures. Log a fixed message plus a stack for our own debugging only.
+    console.error('v1 match error:', err?.message ?? 'unknown error')
+    return NextResponse.json(
+      { error: 'Match failed' },
+      { status: 500, headers: publicApiHeaders() },
+    )
   }
 }
 
@@ -160,5 +188,9 @@ export async function GET() {
       'POST /api/v1/match': 'Score a candidate against a job',
     },
     auth: 'Bearer <api_key>',
-  })
+  }, { headers: publicApiHeaders() })
+}
+
+export async function OPTIONS() {
+  return corsPreflight()
 }

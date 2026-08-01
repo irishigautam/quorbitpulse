@@ -111,10 +111,11 @@ export async function POST(
         }),
       })
       emailSent = true
-    } catch (emailErr) {
+    } catch (emailErr: any) {
       // Don't fail the whole request if email fails — request row is created,
-      // employer can retry the send.
-      console.error('Resend email error (request-llm-consent):', emailErr)
+      // employer can retry the send. Log only the message, not the full
+      // error object, since Resend errors can echo the destination address.
+      console.error('Resend email error (request-llm-consent):', emailErr?.message ?? 'unknown error')
     }
 
     return NextResponse.json({
