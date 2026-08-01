@@ -11,9 +11,10 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params
     const { company } = await requireCompany()
     const supabase = createServiceClient()
     const body = await req.json()
@@ -27,12 +28,12 @@ export async function PATCH(
     const { error } = await supabase
       .from('candidate_job_assignments')
       .update({ tags, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('company_id', company.id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ id: params.id, tags })
+    return NextResponse.json({ id, tags })
   } catch (err) {
     console.error('tags update error:', err)
     return NextResponse.json({ error: 'Unexpected error' }, { status: 500 })

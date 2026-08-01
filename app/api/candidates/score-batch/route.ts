@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Fetch candidate rows — capped to prevent runaway AI spend
-    const candidateIds = assignments.slice(0, MAX_CANDIDATES_PER_BATCH).map(a => a.candidate_id)
+    const candidateIds = assignments.slice(0, MAX_CANDIDATES_PER_BATCH).map((a: any) => a.candidate_id)
     const { data: candidates } = await supabase
       .from('imported_candidates')
       .select('*')
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Build assignment lookup
     const assignmentByCandidateId = Object.fromEntries(
-      assignments.map(a => [a.candidate_id, a.id])
+      assignments.map((a: any) => [a.candidate_id, a.id])
     )
 
     // 5. Process in batches
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < candidates.length; i += BATCH_CONCURRENCY) {
       const chunk = candidates.slice(i, i + BATCH_CONCURRENCY)
 
-      await Promise.all(chunk.map(async (candidate) => {
+      await Promise.all(chunk.map(async (candidate: any) => {
         try {
           // Mark processing
           await supabase

@@ -9,12 +9,9 @@
  * Docs: https://developer.naukri.com/docs/job-posting-api
  */
 
-import type { Job } from '@/types'
-import type { Database } from '@/types/supabase'
+import type { Job, Company } from '@/types'
 import type { DistributionResult } from './indeed'
 import type { IntegrationConfig } from '@/lib/integrations/handlers'
-
-type Company = Database['public']['Tables']['companies']['Row']
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
 const NAUKRI_API = 'https://www.naukri.com/jobapi/v1'

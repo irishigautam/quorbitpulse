@@ -36,8 +36,8 @@ export async function getMonthlyUsage(companyId: string): Promise<UsageCount> {
 
   const events = data ?? []
   return {
-    imports: events.filter(e => e.event_type === 'import').length,
-    chats:   events.filter(e => e.event_type === 'chat').length,
+    imports: events.filter((e: any) => e.event_type === 'import').length,
+    chats:   events.filter((e: any) => e.event_type === 'chat').length,
   }
 }
 

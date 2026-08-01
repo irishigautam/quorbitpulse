@@ -201,7 +201,7 @@ export default async function JobPage({ params }: Props) {
                     Skills
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {job.skills.map(s => (
+                    {job.skills.map((s: string) => (
                       <span key={s} className="text-sm px-3 py-1 rounded-full border bg-gray-50">
                         {s}
                       </span>

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (signUpError) {
     // User may already exist — look them up
     const { data: { users } } = await supabase.auth.admin.listUsers()
-    const existing = users.find(u => u.email === invite.email)
+    const existing = users.find((u: any) => u.email === invite.email)
     if (!existing) return NextResponse.json({ error: 'Failed to create account' }, { status: 500 })
     userId = existing.id
   } else {

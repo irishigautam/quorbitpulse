@@ -14,7 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .eq('status', 'active')
     .order('posted_at', { ascending: false })
 
-  const jobUrls: MetadataRoute.Sitemap = (jobs ?? []).map(job => ({
+  const jobUrls: MetadataRoute.Sitemap = (jobs ?? []).map((job: any) => ({
     url: `${appUrl}/jobs/${jobSlug(job)}`,
     lastModified: new Date(job.posted_at),
     changeFrequency: 'weekly',

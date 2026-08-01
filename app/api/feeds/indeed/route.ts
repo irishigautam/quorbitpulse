@@ -12,12 +12,9 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { jobToIndeedXml } from '@/lib/distribution/indeed'
-import type { Job } from '@/types'
-import type { Database } from '@/types/supabase'
+import type { Job, Company } from '@/types'
 
 export const dynamic = 'force-dynamic'
-
-type Company = Database['public']['Tables']['companies']['Row']
 
 export async function GET() {
   const supabase = createServiceClient()

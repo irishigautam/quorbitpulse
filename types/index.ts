@@ -11,9 +11,12 @@ export interface Company {
   verified: boolean
   plan_active: boolean
   plan_expires_at: string | null
+  plan_tier: string | null
   jobs_quota: number
   jobs_used: number
   razorpay_subscription_id: string | null
+  hrms_webhook_secret: string | null
+  slug: string | null
   created_at: string
 }
 

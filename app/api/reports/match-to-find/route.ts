@@ -69,7 +69,7 @@ export async function GET() {
       .map(([domain, count]) => ({ domain, count }))
 
     // Hire rate by status
-    const hiredCount = candidates.filter(c => c.status === 'hired').length
+    const hiredCount = candidates.filter((c: any) => c.status === 'hired').length
     const hireRate = scored > 0 ? Math.round((hiredCount / scored) * 100) : 0
 
     return NextResponse.json({

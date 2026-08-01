@@ -19,8 +19,16 @@ export async function GET() {
     .select('platform, status, mode, connected_at, last_used_at')
     .eq('company_id', companyId)
 
-  const configMap = new Map(
-    (configs ?? []).map((c: any) => [c.platform, c])
+  interface IntegrationConfigRow {
+    platform: string
+    status: string
+    mode: string | null
+    connected_at: string | null
+    last_used_at: string | null
+  }
+
+  const configMap = new Map<string, IntegrationConfigRow>(
+    (configs ?? []).map((c: IntegrationConfigRow) => [c.platform, c])
   )
 
   // Merge registry defs with live status
@@ -53,6 +61,6 @@ export async function GET() {
 
   return NextResponse.json({
     integrations: statuses,
-    company: { name: company.name, slug: (company as any).slug ?? null },
+    company: { name: company.name, slug: company.slug ?? null },
   })
 }

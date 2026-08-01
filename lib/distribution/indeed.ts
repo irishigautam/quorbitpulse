@@ -7,10 +7,7 @@
  * We also ping Indeed's job submit endpoint to trigger an immediate crawl.
  */
 
-import type { Job } from '@/types'
-import type { Database } from '@/types/supabase'
-
-type Company = Database['public']['Tables']['companies']['Row']
+import type { Job, Company } from '@/types'
 
 export interface DistributionResult {
   status: 'ok' | 'error' | 'skipped'

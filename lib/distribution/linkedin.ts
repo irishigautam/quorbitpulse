@@ -9,11 +9,8 @@
  * Docs: https://learn.microsoft.com/en-us/linkedin/marketing/integrations/community-management/shares/ugc-post-api
  */
 
-import type { Job } from '@/types'
-import type { Database } from '@/types/supabase'
+import type { Job, Company } from '@/types'
 import type { IntegrationConfig, PostResult } from '@/lib/integrations/handlers'
-
-type Company = Database['public']['Tables']['companies']['Row']
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://jobpulse.quorbit.in'
 const LI_API = 'https://api.linkedin.com/v2'

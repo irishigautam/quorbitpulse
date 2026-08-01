@@ -20,7 +20,7 @@ export default async function PipelinePage() {
     .order('posted_at', { ascending: false })
 
   // Count candidates per job in pipeline
-  const jobIds = (jobs ?? []).map(j => j.id)
+  const jobIds = (jobs ?? []).map((j: any) => j.id)
   const { data: counts } = await supabase
     .from('candidate_job_assignments')
     .select('job_id, pipeline_stage')
@@ -55,7 +55,7 @@ export default async function PipelinePage() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {jobs.map(job => (
+          {jobs.map((job: any) => (
             <Link key={job.id} href={`/dashboard/pipeline/${job.id}`}
               className="bg-white rounded-2xl border p-5 hover:border-blue-300 hover:shadow-sm transition-all group">
               <div className="flex items-start justify-between gap-3">

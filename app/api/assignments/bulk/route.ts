@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
 
-    const validIds = new Set((assignments ?? []).map(a => a.id))
+    const validIds = new Set((assignments ?? []).map((a: any) => a.id))
     const ids = assignment_ids.filter(id => validIds.has(id))
 
     if (ids.length === 0) {

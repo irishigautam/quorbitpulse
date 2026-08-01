@@ -11,17 +11,17 @@ import { prepareForUpsert } from '@/lib/job-supply/dedup'
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error: authErr } = await requireCompany()
-  if (authErr) return authErr
+  const { id } = await params
+  await requireCompany()
 
   const supabase = createServiceClient()
 
   const { data: source, error: fetchErr } = await supabase
     .from('career_page_sources')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (fetchErr || !source) {
@@ -56,7 +56,7 @@ export async function POST(
       last_error: result.error ?? null,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', params.id)
+    .eq('id', id)
 
   return NextResponse.json({
     ok: true,

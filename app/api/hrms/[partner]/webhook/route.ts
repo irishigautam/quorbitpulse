@@ -33,9 +33,10 @@ const STAGE_MAP: Record<string, string> = {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { partner: string } }
+  { params }: { params: Promise<{ partner: string }> }
 ) {
-  const partner = params.partner as HrmsPartner
+  const { partner: partnerParam } = await params
+  const partner = partnerParam as HrmsPartner
   if (!VALID_PARTNERS.has(partner)) {
     return NextResponse.json({ error: 'Unknown partner' }, { status: 404 })
   }

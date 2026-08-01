@@ -105,8 +105,8 @@ export default async function AdminPage() {
   const companyNameById: Record<string, string> = {}
   for (const c of companies ?? []) companyNameById[c.id] = c.name
 
-  const active = (companies ?? []).filter(c => c.plan_active).length
-  const annual = (companies ?? []).filter(c => c.billing_cycle === 'annual').length
+  const active = (companies ?? []).filter((c: any) => c.plan_active).length
+  const annual = (companies ?? []).filter((c: any) => c.billing_cycle === 'annual').length
   const tierBreakdown: Record<string, number> = {}
   for (const c of companies ?? []) {
     const t = c.plan_tier ?? 'starter'
@@ -169,7 +169,7 @@ export default async function AdminPage() {
             <tbody>
               {(auditRows ?? []).length === 0 ? (
                 <tr><td colSpan={7} style={{ padding: '1rem', color: '#9CA3AF', textAlign: 'center' }}>No audit events yet</td></tr>
-              ) : (auditRows ?? []).map((a, i) => (
+              ) : (auditRows ?? []).map((a: any, i: number) => (
                 <tr key={a.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
                   <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
                     {new Date(a.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -209,7 +209,7 @@ export default async function AdminPage() {
             <tbody>
               {(failedNotifications ?? []).length === 0 ? (
                 <tr><td colSpan={6} style={{ padding: '1rem', color: '#9CA3AF', textAlign: 'center' }}>No failures recorded</td></tr>
-              ) : (failedNotifications ?? []).map((n, i) => (
+              ) : (failedNotifications ?? []).map((n: any, i: number) => (
                 <tr key={n.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
                   <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
                     {new Date(n.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -246,7 +246,7 @@ export default async function AdminPage() {
             <tbody>
               {(errorRows ?? []).length === 0 ? (
                 <tr><td colSpan={3} style={{ padding: '1rem', color: '#9CA3AF', textAlign: 'center' }}>No errors recorded</td></tr>
-              ) : (errorRows ?? []).map((e, i) => (
+              ) : (errorRows ?? []).map((e: any, i: number) => (
                 <tr key={e.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>
                   <td style={{ padding: '0.45rem 0.6rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
                     {new Date(e.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -273,7 +273,7 @@ export default async function AdminPage() {
             </tr>
           </thead>
           <tbody>
-            {(companies ?? []).map((c, i) => {
+            {(companies ?? []).map((c: any, i: number) => {
               const u = usageByCompany[c.id] ?? { imports: 0, chats: 0 }
               return (
                 <tr key={c.id} style={{ borderBottom: '1px solid #F3F4F6', background: i % 2 === 1 ? '#FAFAFA' : '#fff' }}>

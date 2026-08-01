@@ -9,10 +9,10 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error: authErr } = await requireCompany()
-  if (authErr) return authErr
+  const { id } = await params
+  await requireCompany()
 
   const body = await req.json()
   const supabase = createServiceClient()
@@ -20,7 +20,7 @@ export async function PATCH(
   const { data, error } = await supabase
     .from('career_page_sources')
     .update({ ...body, updated_at: new Date().toISOString() })
-    .eq('id', params.id)
+    .eq('id', id)
     .select()
     .single()
 
@@ -30,16 +30,16 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error: authErr } = await requireCompany()
-  if (authErr) return authErr
+  const { id } = await params
+  await requireCompany()
 
   const supabase = createServiceClient()
   const { error } = await supabase
     .from('career_page_sources')
     .delete()
-    .eq('id', params.id)
+    .eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

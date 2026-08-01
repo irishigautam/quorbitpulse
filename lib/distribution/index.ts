@@ -21,10 +21,7 @@ import {
   type IntegrationConfig,
   type PostResult,
 } from '@/lib/integrations/handlers'
-import type { Job } from '@/types'
-import type { Database } from '@/types/supabase'
-
-type Company = Database['public']['Tables']['companies']['Row']
+import type { Job, Company } from '@/types'
 
 export interface DistributionReport {
   [platform: string]: PostResult

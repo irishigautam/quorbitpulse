@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get existing active/pending sessions for this job to exclude
-    const candidateIds = candidates.map(c => c.id)
+    const candidateIds = candidates.map((c: any) => c.id)
     const { data: existingSessions } = await supabase
       .from('chat_sessions')
       .select('candidate_id, status')
@@ -84,10 +84,10 @@ export async function POST(req: NextRequest) {
       .in('status', ['pending', 'active', 'completed'])
       .in('candidate_id', candidateIds)
 
-    const alreadySent = new Set((existingSessions ?? []).map(s => s.candidate_id))
+    const alreadySent = new Set((existingSessions ?? []).map((s: any) => s.candidate_id))
 
     // Filter to eligible candidates and take top limit
-    const eligible = candidates.filter(c => !alreadySent.has(c.id)).slice(0, limit)
+    const eligible = candidates.filter((c: any) => !alreadySent.has(c.id)).slice(0, limit)
 
     if (eligible.length === 0) {
       return NextResponse.json({

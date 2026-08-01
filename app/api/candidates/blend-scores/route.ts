@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ updated: 0, results: [] })
     }
 
-    const candidateIds = candidates.map(c => c.id)
+    const candidateIds = candidates.map((c: any) => c.id)
 
     // Fetch best completed readiness_score per candidate
     const { data: sessions } = await supabase

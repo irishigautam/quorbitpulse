@@ -20,8 +20,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const { company } = await requireCompany()
   const supabase = createServiceClient()
 
@@ -29,7 +30,7 @@ export async function GET(
   const { data: candidate } = await supabase
     .from('imported_candidates')
     .select('id, full_name')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('company_id', company.id)
     .single()
 
@@ -38,7 +39,7 @@ export async function GET(
   const { data: tokens } = await supabase
     .from('candidate_mcp_tokens')
     .select('id, label, created_at, expires_at, revoked')
-    .eq('candidate_id', params.id)
+    .eq('candidate_id', id)
     .eq('revoked', false)
     .order('created_at', { ascending: false })
 
@@ -47,15 +48,16 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const { company } = await requireCompany()
   const supabase = createServiceClient()
 
   const { data: candidate } = await supabase
     .from('imported_candidates')
     .select('id, full_name, email')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('company_id', company.id)
     .single()
 
@@ -70,7 +72,7 @@ export async function POST(
   const token = 'qbt_' + Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('')
 
   await supabase.from('candidate_mcp_tokens').insert({
-    candidate_id: params.id,
+    candidate_id: id,
     token,
     label,
     expires_at: null,  // no expiry by default; recruiter can revoke
@@ -106,15 +108,16 @@ export async function POST(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const { company } = await requireCompany()
   const supabase = createServiceClient()
 
   const { data: candidate } = await supabase
     .from('imported_candidates')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('company_id', company.id)
     .single()
 
@@ -123,7 +126,7 @@ export async function DELETE(
   await supabase
     .from('candidate_mcp_tokens')
     .update({ revoked: true })
-    .eq('candidate_id', params.id)
+    .eq('candidate_id', id)
 
   return NextResponse.json({ revoked: true })
 }

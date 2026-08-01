@@ -143,7 +143,7 @@ export default async function CompanyPublicPage({ params }: Props) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {openJobs.map(job => (
+            {openJobs.map((job: any) => (
               <Link
                 key={job.id}
                 href={`/jobs/${jobSlug(job)}`}

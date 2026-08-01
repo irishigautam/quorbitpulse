@@ -9,8 +9,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { detectAtsFromUrl, detectAtsFromHtml } from '@/lib/job-supply/career-scraper'
 
 export async function GET() {
-  const { error } = await requireCompany()
-  if (error) return error
+  await requireCompany()
 
   const supabase = createServiceClient()
   const { data, error: dbErr } = await supabase
@@ -23,8 +22,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { error: authErr } = await requireCompany()
-  if (authErr) return authErr
+  await requireCompany()
 
   const body = await req.json()
   const { company_name, career_url } = body
