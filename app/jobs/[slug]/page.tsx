@@ -17,14 +17,22 @@ async function getJob(slug: string) {
   // `id` is a uuid column — plain ILIKE against it fails with
   // "operator does not exist: uuid ~~* unknown" (Postgres has no ILIKE for
   // uuid). This 404'd every single job detail page in production (confirmed
-  // via direct SQL during the Gate 6 smoke test — the exact same query
-  // errors with 42883 when run without the cast). `id::text` tells
-  // PostgREST to cast the column before applying the filter.
+  // via direct SQL during the Gate 6 smoke test). Tried `.ilike('id::text', ...)`
+  // expecting PostgREST to cast the column, but that produced the identical
+  // 42883 error in prod, so the cast wasn't reaching Postgres — not relying
+  // on that. Instead, since id8 is exactly the first 8 hex chars of the uuid
+  // (the standard 8-4-4-4-12 format), a range match on those native uuid
+  // comparison operators (which ARE defined, unlike ILIKE) finds the same
+  // row with no pattern matching or casting involved.
+  const lo = `${id8}-0000-0000-0000-000000000000`
+  const hi = `${id8}-ffff-ffff-ffff-ffffffffffff`
+
   const { data: jobs, error } = await supabase
     .from('jobs')
     .select('*, company:companies(*)')
     .eq('status', 'active')
-    .ilike('id::text', `${id8}%`)
+    .gte('id', lo)
+    .lte('id', hi)
     .limit(5)
 
   if (error) {
