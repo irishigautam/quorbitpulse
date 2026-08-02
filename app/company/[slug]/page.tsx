@@ -13,15 +13,20 @@ import { jobSlug } from '@/types'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const supabase = createServiceClient()
+  // QA-audit fix: same bug class as app/dashboard/pipeline/[jobId]/page.tsx -
+  // params is a Promise in Next.js 16 and must be awaited. Reading
+  // params.slug directly made this always undefined, so the company lookup
+  // matched nothing and this page 404'd for every company, always.
+  const { slug } = await params
   const { data: company } = await supabase
     .from('companies')
     .select('name, description, website')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single()
 
   if (!company) return { title: 'Company Not Found' }
@@ -38,11 +43,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CompanyPublicPage({ params }: Props) {
   const supabase = createServiceClient()
+  const { slug } = await params
 
   const { data: company } = await supabase
     .from('companies')
     .select('id, name, slug, website, logo_url, description, verified, created_at')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .single()
 
   if (!company) notFound()
