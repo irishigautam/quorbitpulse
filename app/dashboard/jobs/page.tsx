@@ -8,6 +8,11 @@ import RetryDistributionButton from './RetryDistributionButton'
 import ResyncDistributionButton from './ResyncDistributionButton'
 import { SYNC_STATUS_LABEL, SYNC_STATUS_COLOR } from '@/lib/distribution/sync-status'
 
+// Same stale-read-after-write bug class as app/dashboard/page.tsx: requireCompany()
+// and the jobs list below read live, frequently-mutated data (e.g. expire listing),
+// so this route must never be served from the Full Route Cache / Data Cache.
+export const dynamic = 'force-dynamic'
+
 const CHANNEL_ICONS: Record<string, string> = {
   indeed: '🔵',
   google: '🔍',

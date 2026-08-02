@@ -12,6 +12,18 @@
   --accent: #2563EB;
   --accent-hover: #1D4ED8;
   --accent-light: #DBEAFE;
+  /* QA-audit fix: several components (candidate dashboard "Save profile" /
+     "Browse matched jobs" buttons, candidate signup/login/layout, public
+     candidate profile, job feed, employer usage + Apollo import pages - 9
+     files total) style their background/color via var(--primary), but
+     --primary was never defined anywhere in this file. An undefined custom
+     property makes the whole declaration invalid, so backgrounds silently
+     fell back to transparent while hardcoded white text stayed - rendering
+     several real, clickable buttons completely invisible. Aliasing to
+     --accent (the color actually used everywhere else for primary actions)
+     fixes all 9 call sites at once without touching each component. */
+  --primary: #2563EB;
+  --primary-hover: #1D4ED8;
 
   /* Neutral */
   --background: #ffffff;

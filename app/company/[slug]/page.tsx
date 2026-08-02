@@ -70,7 +70,12 @@ export default async function CompanyPublicPage({ params }: Props) {
         <Link href="/" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', textDecoration: 'none', color: 'var(--navy)' }}>
           Pulse
         </Link>
-        <Link href="/candidate/jobs" style={{ fontSize: '0.875rem', color: 'var(--accent)', fontWeight: 500, textDecoration: 'none' }}>
+        {/* QA-audit fix: this linked to /candidate/jobs, which is the
+            auth-gated, match-scored personalized feed (requireCandidate()) -
+            anonymous visitors clicking this from a public company page were
+            sent straight to a login wall instead of browsing anything. /jobs
+            is the actual public, no-account-required listing. */}
+        <Link href="/jobs" style={{ fontSize: '0.875rem', color: 'var(--accent)', fontWeight: 500, textDecoration: 'none' }}>
           Browse all jobs →
         </Link>
       </header>

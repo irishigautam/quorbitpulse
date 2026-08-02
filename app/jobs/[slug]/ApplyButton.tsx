@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 /**
@@ -20,6 +20,26 @@ export default function ApplyButton({ jobId, jobSlug }: { jobId: string; jobSlug
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<'idle' | 'applied' | 'already' | 'error'>('idle')
   const [message, setMessage] = useState('')
+
+  // QA-audit fix: check on mount whether this candidate already applied, so
+  // the button reflects reality immediately instead of only after a click
+  // that gets rejected server-side as a duplicate. Best-effort - if this
+  // check fails for any reason, the button just falls back to its previous
+  // "Apply on Pulse" state, and the server-side duplicate check still
+  // prevents a real second application either way.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/candidate/apply/status?job_id=${encodeURIComponent(jobId)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!cancelled && data?.applied) {
+          setStatus('already')
+          setMessage('You already applied to this role.')
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [jobId])
 
   async function handleApply() {
     setLoading(true)

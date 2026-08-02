@@ -46,7 +46,7 @@ export default async function PipelineJobPage({ params }: { params: Promise<{ jo
       updated_at,
       candidate:imported_candidates(
         id, full_name, email, current_title, current_company,
-        location, match_score, blended_score, status
+        location, match_score, blended_score, status, resume_file_path
       )
     `)
     .eq('job_id', jobId)

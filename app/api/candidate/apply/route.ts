@@ -14,6 +14,7 @@ import { logEvent } from '@/lib/analytics/log-event'
 import { computeMatchScore } from '@/lib/scoring/engine'
 import { sendApplicationReceivedEmail, sendNewApplicationEmail } from '@/lib/ats/notifications'
 import { notifyAttempt } from '@/lib/notifications/log'
+import { toSafeAiErrorMessage } from '@/lib/ai/client'
 import type { CandidateFingerprint } from '@/lib/scoring/fingerprint'
 import type { CandidateProfile } from '@/types'
 
@@ -212,7 +213,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ application_id: application.id, match_score: matchScore })
   } catch (err: any) {
-    console.error('apply error:', err)
-    return NextResponse.json({ error: err.message ?? 'Apply failed' }, { status: 500 })
+    return NextResponse.json(
+      { error: toSafeAiErrorMessage(err, 'candidate-apply', 'Apply failed. Please try again shortly.') },
+      { status: 500 },
+    )
   }
 }

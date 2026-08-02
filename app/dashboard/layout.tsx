@@ -2,9 +2,19 @@ import { requireCompany } from '@/lib/auth'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { isAdminEmail } from '@/lib/admin-auth'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { company, role } = await requireCompany()
+
+  // QA-audit fix: Job Sources manages a shared, platform-wide scraping
+  // pipeline with no per-company scoping (see app/api/job-sources/route.ts) -
+  // it was showing in every customer's nav even though the underlying API
+  // now restricts it to Quorbit staff. Hide the link for everyone else so a
+  // regular customer isn't shown a nav item that 403s.
+  const sessionClient = await createClient()
+  const { data: { user: sessionUser } } = await sessionClient.auth.getUser()
+  const isStaff = isAdminEmail(sessionUser?.email)
 
   async function signOut() {
     'use server'
@@ -41,9 +51,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/dashboard/integrations" className="hover:opacity-75 font-medium">
               Integrations
             </Link>
-            <Link href="/dashboard/job-sources" className="hover:opacity-75 font-medium">
-              Job Sources
-            </Link>
+            {isStaff && (
+              <Link href="/dashboard/job-sources" className="hover:opacity-75 font-medium">
+                Job Sources
+              </Link>
+            )}
             {role === 'admin' && (
               <Link href="/dashboard/team" className="hover:opacity-75 font-medium">
                 Team

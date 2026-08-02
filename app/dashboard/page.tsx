@@ -1,9 +1,13 @@
 import { requireCompany } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Dashboard' }
+
+// Same stale-read-after-write bug class as app/dashboard/jobs/page.tsx: requireCompany()
+// does a live DB read and can redirect() on plan_active, so this route must never be cached.
+export const dynamic = 'force-dynamic'
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -41,11 +45,27 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   // those rows are created alongside a candidate_applications row already
   // (see app/api/candidate/apply/route.ts) and would otherwise be double-
   // counted.
-  const { count: applicationCount } = await supabase
+  //
+  // QA-audit fix: this always showed 0 applicants even with a real,
+  // verified-in-the-database application. Root cause: candidate_applications
+  // has RLS enabled (relrowsecurity = true) but zero policies defined, which
+  // in Postgres means the table is invisible to every role except one that
+  // bypasses RLS. `createClient()` above is the regular
+  // authenticated-user-scoped client, which is subject to RLS, so this
+  // count query silently returned 0 every time no matter how many
+  // applications existed - while Dashboard -> Pipeline correctly showed the
+  // same application, because that path already reads via the service-role
+  // client. Switching this one query to the service client is consistent
+  // with how every other company-scoped read in this app works: the
+  // .eq('company_id', company.id) filter is what actually enforces
+  // per-tenant scoping here, using the company id already authorized by
+  // requireCompany() above - not row-level security.
+  const svc = createServiceClient()
+  const { count: applicationCount } = await svc
     .from('candidate_applications')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', company.id)
-  const { count: sourcedCount } = await supabase
+  const { count: sourcedCount } = await svc
     .from('imported_candidates')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', company.id)

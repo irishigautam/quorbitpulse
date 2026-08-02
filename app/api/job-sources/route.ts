@@ -5,11 +5,35 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCompany } from '@/lib/auth'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { detectAtsFromUrl, detectAtsFromHtml } from '@/lib/job-supply/career-scraper'
+import { isAdminEmail } from '@/lib/admin-auth'
+
+// QA-audit fix: career_page_sources is a single shared, platform-wide list of
+// scrape targets (no company_id column exists on this table at all - scraped
+// jobs are upserted into the separate job_listings table that feeds every
+// candidate's job feed, not any one company's own listings). Every route
+// here previously only checked requireCompany(), which just confirms the
+// caller belongs to *some* company - so any customer, including a brand-new
+// free-coupon signup, could view, disable, remove, or trigger scrapes
+// against Quorbit's shared internal sourcing pipeline. This is an internal
+// operations tool, not a customer feature, so it's now restricted to the
+// same admin allowlist used by /admin (lib/admin-auth.ts) instead of being
+// rescoped per-company, since per-company scoping isn't what this table or
+// pipeline actually represents.
+async function requireAdmin() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!isAdminEmail(user?.email)) {
+    return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+  }
+  return null
+}
 
 export async function GET() {
   await requireCompany()
+  const denied = await requireAdmin()
+  if (denied) return denied
 
   const supabase = createServiceClient()
   const { data, error: dbErr } = await supabase
@@ -23,6 +47,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   await requireCompany()
+  const denied = await requireAdmin()
+  if (denied) return denied
 
   const body = await req.json()
   const { company_name, career_url } = body

@@ -6,6 +6,11 @@ import CandidatePoolClient from './CandidatePoolClient'
 
 export const metadata: Metadata = { title: 'Candidates' }
 
+// Same stale-read-after-write bug class as app/dashboard/page.tsx and
+// app/dashboard/jobs/page.tsx: requireCompany() and the queries below read
+// live, frequently-mutated data, so this route must never be cached.
+export const dynamic = 'force-dynamic'
+
 export default async function CandidatesPage() {
   const { company } = await requireCompany()
   const supabase = await createClient()

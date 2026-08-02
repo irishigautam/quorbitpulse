@@ -15,6 +15,7 @@ interface Candidate {
   location: string | null
   match_score: number | null
   blended_score: number | null
+  resume_file_path: string | null
 }
 
 interface Assignment {
@@ -139,14 +140,22 @@ function CardModal({
               {c.current_title ?? '—'}{c.current_company ? ` · ${c.current_company}` : ''}
             </p>
             {c.email && <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{c.email}</p>}
-            <button
-              onClick={openResume}
-              disabled={resumeLoading}
-              className="text-xs mt-1.5 px-2 py-0.5 rounded-full font-medium border hover:bg-gray-50 disabled:opacity-60"
-              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
-            >
-              {resumeLoading ? 'Opening…' : '📄 View resume'}
-            </button>
+            {/* QA-audit fix: this used to always render, even for candidates
+                with no resume on file (e.g. resume parsing failed or was
+                never attempted) - clicking it then correctly showed "No
+                resume on file for this candidate" rather than crashing, but
+                showing an affordance for something that doesn't exist is
+                confusing. Only render it when there's actually a file. */}
+            {c.resume_file_path && (
+              <button
+                onClick={openResume}
+                disabled={resumeLoading}
+                className="text-xs mt-1.5 px-2 py-0.5 rounded-full font-medium border hover:bg-gray-50 disabled:opacity-60"
+                style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+              >
+                {resumeLoading ? 'Opening…' : '📄 View resume'}
+              </button>
+            )}
             {resumeError && <p className="text-xs mt-1" style={{ color: '#991B1B' }}>{resumeError}</p>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">

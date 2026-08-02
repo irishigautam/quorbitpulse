@@ -13,6 +13,7 @@ import { requireCandidate } from '@/lib/candidate-auth'
 import { createServiceClient } from '@/lib/supabase/server'
 import { parseResume } from '@/lib/candidate/resume-parser'
 import { scanFile } from '@/lib/security/virus-scan'
+import { toSafeAiErrorMessage } from '@/lib/ai/client'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -109,7 +110,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ fingerprint })
   } catch (err: any) {
-    console.error('resume parse error:', err)
-    return NextResponse.json({ error: err.message ?? 'Parse failed' }, { status: 500 })
+    return NextResponse.json(
+      { error: toSafeAiErrorMessage(err, 'candidate-resume', 'Resume processing is temporarily unavailable. Please try again shortly.') },
+      { status: 500 },
+    )
   }
 }
