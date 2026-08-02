@@ -17,6 +17,12 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pulse.thequorbit.com'
 
 export async function POST(req: NextRequest) {
+  // QA-audit fix: this handler already destructures `userId` from
+  // requireRole() below, but further down it re-derived the actor id via
+  // `(await supabase.auth.getUser())` on the service-role client - which has
+  // no session/cookie context, so that call always resolved to a null user.
+  // company_invites.invited_by is NOT NULL with no default, so every single
+  // invite attempt failed the not-null constraint and 500'd, unconditionally.
   const { companyId, company, userId, role: requesterRole } = await requireRole('admin')
   const { email, role } = await req.json()
 
@@ -44,7 +50,7 @@ export async function POST(req: NextRequest) {
       company_id: companyId,
       email,
       role: role ?? 'recruiter',
-      invited_by: (await supabase.auth.getUser()).data.user?.id,
+      invited_by: userId,
     }, { onConflict: 'company_id,email' })
     .select('token, last_sent_at')
     .single()
