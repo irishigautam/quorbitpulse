@@ -51,10 +51,12 @@ export default function TeamPage() {
     ]).then(([teamData, meData]) => {
       setMembers(teamData.members ?? [])
       setInvites(teamData.invites ?? [])
-      setMyUserId(meData.company?.user_id ?? '')
-      // Determine my role
-      const me = (teamData.members ?? []).find((m: Member) => m.user_id === meData.userId)
-      setMyRole(me?.role ?? 'viewer')
+      setMyUserId(meData.userId ?? '')
+      // QA-audit fix: /api/company/me now returns role directly (from
+      // requireCompany()) so this no longer depends on finding ourselves in
+      // the members list, which was silently failing before meData.userId
+      // existed at all.
+      setMyRole(meData.role ?? 'viewer')
       setLoading(false)
     })
   }, [])

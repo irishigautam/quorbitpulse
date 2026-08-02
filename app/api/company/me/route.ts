@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const { company } = await requireCompany()
+    const { userId, role, company } = await requireCompany()
 
     const safe = {
       id: company.id,
@@ -24,7 +24,14 @@ export async function GET() {
       naukri_client_id: (company as any).naukri_client_id ? '***' : null,
     }
 
-    return NextResponse.json({ company: safe })
+    // QA-audit fix: this response never included userId (or role), but
+    // app/dashboard/team/page.tsx relies on meData.userId to find "myself"
+    // in the members list and derive isAdmin from it. With userId always
+    // undefined, that lookup could never match, so isAdmin was permanently
+    // false for every admin - the invite form never rendered for anyone,
+    // independent of (and in addition to) the separate members-list bug
+    // fixed in /api/team/members.
+    return NextResponse.json({ userId, role, company: safe })
   } catch {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
