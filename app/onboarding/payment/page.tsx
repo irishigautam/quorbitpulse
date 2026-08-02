@@ -25,6 +25,10 @@ function PaymentContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [scriptLoaded, setScriptLoaded] = useState(false)
+  const [showCoupon, setShowCoupon] = useState(false)
+  const [couponCode, setCouponCode] = useState('')
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponError, setCouponError] = useState('')
 
   useEffect(() => {
     const script = document.createElement('script')
@@ -78,6 +82,29 @@ function PaymentContent() {
       setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return
+    setCouponLoading(true)
+    setCouponError('')
+    try {
+      const res = await fetch('/api/payments/coupon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponCode }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        router.push('/dashboard?welcome=1')
+      } else {
+        setCouponError(data.error || 'Invalid coupon code.')
+      }
+    } catch {
+      setCouponError('Something went wrong. Please try again.')
+    } finally {
+      setCouponLoading(false)
     }
   }
 
@@ -146,6 +173,46 @@ function PaymentContent() {
         <p className="text-center text-xs mt-3" style={{ color: 'var(--muted)' }}>
           Secure payment via Razorpay. Instant activation.
         </p>
+
+        <div className="mt-4 pt-4 border-t text-center">
+          {!showCoupon ? (
+            <button
+              type="button"
+              onClick={() => setShowCoupon(true)}
+              className="text-xs underline"
+              style={{ color: 'var(--muted)' }}
+            >
+              Have a coupon code?
+            </button>
+          ) : (
+            <div className="text-left">
+              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--muted)' }}>
+                Coupon code
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={e => setCouponCode(e.target.value)}
+                  placeholder="Enter code"
+                  className="flex-1 border rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={couponLoading || !couponCode.trim()}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border"
+                  style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                >
+                  {couponLoading ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+              {couponError && (
+                <p className="text-xs text-red-600 mt-2">{couponError}</p>
+              )}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>
