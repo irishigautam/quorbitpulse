@@ -10,15 +10,23 @@ import KanbanClient from './KanbanClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PipelineJobPage({ params }: { params: { jobId: string } }) {
+export default async function PipelineJobPage({ params }: { params: Promise<{ jobId: string }> }) {
   const { company } = await requireCompany()
   const supabase = createServiceClient()
+  // QA-audit fix: this repo runs Next.js 16, where dynamic route `params` is a
+  // Promise that must be awaited — every other dynamic route in this codebase
+  // does this correctly, but this file read `params.jobId` directly off the
+  // unawaited Promise, which is always undefined. That made the job lookup
+  // below match nothing and call notFound() on every single request,
+  // regardless of company/permissions/candidates - the entire Kanban pipeline
+  // board was unreachable for every job, for every company, in production.
+  const { jobId } = await params
 
   // Verify job belongs to company
   const { data: job } = await supabase
     .from('jobs')
     .select('id, title, status')
-    .eq('id', params.jobId)
+    .eq('id', jobId)
     .eq('company_id', company.id)
     .single()
 
@@ -41,7 +49,7 @@ export default async function PipelineJobPage({ params }: { params: { jobId: str
         location, match_score, blended_score, status
       )
     `)
-    .eq('job_id', params.jobId)
+    .eq('job_id', jobId)
     .eq('company_id', company.id)
     .order('match_score', { ascending: false })
 

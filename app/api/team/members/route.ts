@@ -14,11 +14,42 @@ export async function GET() {
   const { companyId } = await requireRole('viewer')
   const supabase = createServiceClient()
 
-  const { data: members } = await supabase
+  const { data: rawMembers } = await supabase
     .from('company_members')
-    .select('id, user_id, role, created_at, accepted_at, invited_email, user:auth.users(email, raw_user_meta_data)')
+    .select('id, user_id, role, created_at, accepted_at, invited_email')
     .eq('company_id', companyId)
     .order('created_at', { ascending: true })
+
+  // QA-audit fix: there is no foreign key from company_members.user_id to
+  // auth.users, so PostgREST cannot resolve the embedded `user:auth.users(...)`
+  // resource this query used to request. That made the whole select silently
+  // fail (200 response, but `members` came back null/empty) even when real
+  // members existed - the Team page showed "Members (0)" for every company
+  // and, as a direct consequence, the admin-only invite form never rendered
+  // for anyone (the client infers "am I admin?" from finding itself in this
+  // same list). Fetch each member's auth user directly via the admin API
+  // instead of relying on a join that has no schema relationship to resolve.
+  type RawMember = {
+    id: string
+    user_id: string | null
+    role: string
+    created_at: string
+    accepted_at: string | null
+    invited_email: string | null
+  }
+
+  const members = await Promise.all(
+    (rawMembers ?? []).map(async (m: RawMember) => {
+      if (!m.user_id) return { ...m, user: undefined }
+      const { data } = await supabase.auth.admin.getUserById(m.user_id)
+      return {
+        ...m,
+        user: data?.user
+          ? { email: data.user.email ?? '', raw_user_meta_data: data.user.user_metadata }
+          : undefined,
+      }
+    }),
+  )
 
   // Also get pending invites
   const { data: invites } = await supabase
