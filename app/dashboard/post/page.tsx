@@ -65,6 +65,18 @@ export default function PostJobPage() {
   const [quota, setQuota] = useState<{ used: number; total: number } | null>(null)
   const [step, setStep] = useState<'form' | 'preview'>('form')
 
+  // Retry-safety: one idempotency key per submission intent (publish vs
+  // draft-save), generated once per page load and reused on any retry of
+  // that specific action. If a network timeout causes the browser/fetch
+  // layer to silently resend the identical request, /api/jobs/create
+  // recognizes the repeated key and returns the already-created job instead
+  // of creating a duplicate. A fresh page load (a genuinely new job) gets a
+  // fresh key.
+  const publishKeyRef = useRef<string>('')
+  if (!publishKeyRef.current) publishKeyRef.current = crypto.randomUUID()
+  const draftKeyRef = useRef<string>('')
+  if (!draftKeyRef.current) draftKeyRef.current = crypto.randomUUID()
+
   // Detection state
   const [detecting, setDetecting] = useState(false)
   const [autoDetected, setAutoDetected] = useState(false)
@@ -198,7 +210,7 @@ export default function PostJobPage() {
       const res = await fetch('/api/jobs/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, status: 'active' }),
+        body: JSON.stringify({ ...form, status: 'active', idempotency_key: publishKeyRef.current }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -227,7 +239,7 @@ export default function PostJobPage() {
       const res = await fetch('/api/jobs/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, status: 'draft' }),
+        body: JSON.stringify({ ...form, status: 'draft', idempotency_key: draftKeyRef.current }),
       })
       if (!res.ok) {
         const data = await res.json()

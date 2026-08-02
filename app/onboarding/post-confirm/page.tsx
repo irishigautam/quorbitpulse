@@ -58,7 +58,13 @@ export default function PostConfirmPage() {
           careers_email: meta.careers_email ?? user.email,
         })
 
-      if (companyError) {
+      // A DB-level UNIQUE(user_id) constraint on companies backstops the
+      // exists-check above against a real race (two tabs, a retried
+      // request landing after the first insert already committed). If we
+      // lose that race, the other request's company row already exists and
+      // this account is in the correct end state - treat it as success
+      // instead of surfacing a raw constraint-violation error.
+      if (companyError && companyError.code !== '23505') {
         setError(companyError.message)
         return
       }

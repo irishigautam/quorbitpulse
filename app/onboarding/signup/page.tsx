@@ -87,7 +87,11 @@ export default function SignupPage() {
       .select('id')
       .single()
 
-    if (companyError) {
+    // companies.user_id has a DB-level UNIQUE constraint. A retried submit
+    // (double-click, a lost response that the browser resends) hitting this
+    // after an earlier attempt already succeeded should not show an error -
+    // the account is already in the correct end state, just continue.
+    if (companyError && companyError.code !== '23505') {
       setLoading(false)
       return setError(companyError.message)
     }

@@ -7,7 +7,7 @@ import { computeJobFingerprint } from '@/lib/distribution/fingerprint'
 import { logEvent } from '@/lib/analytics/log-event'
 import { logAudit } from '@/lib/audit/log'
 import { notifyAttempt } from '@/lib/notifications/log'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { jobSlug } from '@/types'
 import type { PostJobFormValues } from '@/types'
 
@@ -21,14 +21,32 @@ export async function POST(req: NextRequest) {
   const { userId, company, role } = await requireRole('recruiter')
   const supabase = await createClient()
 
-  const form: PostJobFormValues & { status?: 'active' | 'draft' } = await req.json()
+  const form: PostJobFormValues & { status?: 'active' | 'draft'; idempotency_key?: string } = await req.json()
   const isDraft = form.status === 'draft'
+
+  // Retry-safety: if the client sent an idempotency key and a job with that
+  // (company_id, idempotency_key) pair already exists, this is a retry of a
+  // request that already succeeded (lost response, network-level retry) -
+  // return the existing job instead of creating a duplicate.
+  if (form.idempotency_key) {
+    const { data: existingJob } = await supabase
+      .from('jobs')
+      .select()
+      .eq('company_id', company.id)
+      .eq('idempotency_key', form.idempotency_key)
+      .maybeSingle()
+    if (existingJob) {
+      return NextResponse.json({ success: true, job: existingJob })
+    }
+  }
 
   // Drafts don't count against the posting quota or require an active plan —
   // both only matter once the job actually goes live. They're re-checked for
   // real at /api/jobs/[id]/publish when a draft is published.
   if (!isDraft) {
     if (!company.plan_active) return NextResponse.json({ error: 'Plan not active' }, { status: 403 })
+    // Fast-path rejection only, using requireRole()'s possibly-stale read of
+    // company.jobs_used - actual enforcement is the atomic RPC below.
     if (company.jobs_used >= company.jobs_quota) {
       return NextResponse.json({ error: 'Job quota exceeded' }, { status: 403 })
     }
@@ -72,6 +90,20 @@ export async function POST(req: NextRequest) {
     apply_email: form.apply_email?.trim() ? form.apply_email.trim() : null,
   })
 
+  // Reserve quota atomically before inserting the job (non-draft only) -
+  // reusing the same try_increment_job_quota RPC that /api/jobs/[id]/publish
+  // uses, instead of the previous separate, non-atomic
+  // `jobs_used: company.jobs_used + 1` read-then-write this route used to
+  // have (two independently-written copies of the same race). If the
+  // insert below fails after this succeeds, the reservation is released.
+  const serviceClient = createServiceClient()
+  if (!isDraft) {
+    const { data: quotaOk } = await serviceClient.rpc('try_increment_job_quota', { p_company_id: company.id })
+    if (!quotaOk) {
+      return NextResponse.json({ error: 'Job quota exceeded' }, { status: 403 })
+    }
+  }
+
   const { data: job, error } = await supabase
     .from('jobs')
     .insert({
@@ -95,12 +127,18 @@ export async function POST(req: NextRequest) {
       status: isDraft ? 'draft' : 'active',
       expires_at: expiresAt.toISOString(),
       fingerprint,
+      idempotency_key: form.idempotency_key ?? null,
     })
     .select()
     .single()
 
   if (error || !job) {
     console.error('[jobs/create]', error)
+    if (!isDraft) {
+      // Release the quota we reserved above - a failed insert should not
+      // permanently burn one unit of the company's quota.
+      await serviceClient.rpc('decrement_job_quota', { p_company_id: company.id })
+    }
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
   }
 
@@ -121,12 +159,6 @@ export async function POST(req: NextRequest) {
     )
     return NextResponse.json({ success: true, job })
   }
-
-  // Increment jobs_used
-  await supabase
-    .from('companies')
-    .update({ jobs_used: company.jobs_used + 1 })
-    .eq('id', company.id)
 
   // Post-response side effects (Google indexing, email, multi-channel distribution,
   // funnel logging). These were previously called without awaiting and without

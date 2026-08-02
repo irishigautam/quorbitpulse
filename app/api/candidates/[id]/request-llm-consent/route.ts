@@ -50,7 +50,7 @@ export async function POST(
     // Verify candidate belongs to this company
     const { data: candidate, error: candidateErr } = await supabase
       .from('imported_candidates')
-      .select('id, full_name, email, llm_consent_status')
+      .select('id, full_name, email, llm_consent_status, llm_consent_requested_at, llm_consent_expires_at')
       .eq('id', candidateId)
       .eq('company_id', company.id)
       .single()
@@ -71,6 +71,25 @@ export async function POST(
         { error: 'Candidate has already approved this analysis.' },
         { status: 409 },
       )
+    }
+
+    // Retry-safety: a request within 30 seconds of an already-pending
+    // request is almost certainly a retry (network timeout, accidental
+    // double-submit), not a deliberate second request - without this check,
+    // every retry both rotates the consent token (silently invalidating the
+    // one already emailed, in case it did in fact arrive) and sends a
+    // second email. A genuine re-request after that window still goes
+    // through and rotates the token as before.
+    if (
+      candidate.llm_consent_status === 'pending' &&
+      candidate.llm_consent_requested_at &&
+      Date.now() - new Date(candidate.llm_consent_requested_at).getTime() < 30_000
+    ) {
+      return NextResponse.json({
+        requested: true,
+        email_sent: true,
+        expires_at: candidate.llm_consent_expires_at,
+      })
     }
 
     // Mint token — a fresh request invalidates any prior unresponded one,
