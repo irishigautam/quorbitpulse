@@ -134,6 +134,7 @@ export default async function CompanyPublicPage({ params }: Props) {
         </div>
 
         {/* Jobs list */}
+        <style>{`.qa-job-card:hover { border-color: var(--accent) !important; }`}</style>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: 0 }}>
             Open Roles
@@ -155,7 +156,22 @@ export default async function CompanyPublicPage({ params }: Props) {
                 href={`/jobs/${jobSlug(job)}`}
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
-                <div style={{
+                {/*
+                  QA-audit fix: this is a Server Component (CompanyPublicPage
+                  has no 'use client'), and it used to attach onMouseEnter/
+                  onMouseLeave function props directly to this div. React
+                  Server Components can't serialize function props on plain
+                  DOM elements they render - this threw "Event handlers
+                  cannot be passed to Client Component props" and 500'd the
+                  whole page, for every company, as soon as it had at least
+                  one active job to render (confirmed via Vercel error logs:
+                  first occurrence 2026-08-01, unrelated to today's changes -
+                  it was simply masked until a company with a real published
+                  job loaded this page). Replaced the JS hover handlers with
+                  a plain CSS class + <style> rule, since the effect (border
+                  color on hover) never needed interactivity in the first place.
+                */}
+                <div className="qa-job-card" style={{
                   background: '#fff',
                   border: '1px solid var(--border)',
                   borderRadius: 10,
@@ -166,10 +182,7 @@ export default async function CompanyPublicPage({ params }: Props) {
                   gap: '1rem',
                   cursor: 'pointer',
                   transition: 'border-color 0.15s',
-                }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                >
+                }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{job.title}</div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
